@@ -4,10 +4,10 @@ function App() {
   return (
     <div className="App">
       <h1>
-        Blockchain Based Expense Sharing App
+        tabX
       </h1>
       <h2>
-        Home Page
+      Blockchain Based Expense Sharing App
       </h2>
     </div>
   );
