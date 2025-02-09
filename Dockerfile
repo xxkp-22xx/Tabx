@@ -5,10 +5,10 @@ FROM node:alpine AS development
 ENV NODE_ENV development
 
 # Setting up the work directory
-WORKDIR /react-app
+WORKDIR /my-app
 
 # Installing dependencies
-COPY ./package*.json /react-app
+COPY ./my-app/package.json /package-lock.json
 
 RUN npm install
 
