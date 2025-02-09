@@ -8,7 +8,7 @@ FROM node:alpine AS development
 WORKDIR /my-app
 
 # Installing dependencies
-COPY ./package*.json /react-app
+COPY ./package*.json /my-app/
 
 RUN npm install
 
