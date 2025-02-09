@@ -62,7 +62,7 @@ const abi = [
 ];
 
 // our contract's deployed address
-const address = "0xe71350C8d11d61F4eb7C06fE243b3FBf0E3fDA88";
+const address = "0xFB6128e17d561662752FabF8a41A5874e5359D30";
 
 const contract = new web3.eth.Contract(abi, address);
 
