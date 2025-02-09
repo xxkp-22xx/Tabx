@@ -8,7 +8,7 @@ ENV NODE_ENV development
 WORKDIR /my-app
 
 # Installing dependencies
-COPY ./my-app/package.json /package-lock.json
+COPY ./my-app/package.json ./my-app/package-lock.json ./
 
 RUN npm install
 
@@ -17,4 +17,4 @@ COPY . .
 
 EXPOSE 3000 
 # Starting our application
-CMD ["npm","start"]
+CMD ["npm", "start"]
