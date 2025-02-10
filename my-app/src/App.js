@@ -42,7 +42,7 @@ const App = () => {
         type="text"
         value={newMessage}
         onChange={(e) => setNewMessage(e.target.value)}
-        placeholder="Enter new message"
+        placeholder="Enter new message here"
       />
       <button onClick={updateMessage}>Update Progress</button>
     </div>
