@@ -19,7 +19,7 @@ contract TabxExpenseSharing {
     string public message;
 
     constructor() {
-        message = "Hello, World!";
+        message = "Development Stage! CI/CD Pipeline in Progress!";
     }
 
     function setMessage(string memory newMessage) public {
