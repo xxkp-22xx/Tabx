@@ -65,6 +65,7 @@ const abi = [
 // our contract's deployed address
 const address = "0x0D38676C0A673f4Ba492F58f09fF4aAbA0Ca18e5";
 
+
 const contract = new web3.eth.Contract(abi, address);
 
 export default contract;
