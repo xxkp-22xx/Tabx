@@ -129,11 +129,11 @@ contract TabX {
         }
         newExpense.participants = participantAddresses;
 
-        // Distribute shares and update balances
         for (uint256 i = 0; i < participantAddresses.length; i++) {
             address participant = participantAddresses[i];
             uint256 adjustedShare = share;
             if (i == 0) adjustedShare += remainder;
+
             
             newExpense.shares[participant] = adjustedShare;
             balances[participant][groupId] -= int256(adjustedShare);
@@ -153,7 +153,7 @@ contract TabX {
         require(msg.value >= share, "Insufficient payment");
         require(!expense.settled, "Expense already settled");
 
-        // Update balances
+        // Update balances at all levels
         balances[msg.sender][groupId] += int256(msg.value);
         balances[expense.payer][groupId] -= int256(msg.value);
         expense.remainingAmount -= msg.value;
