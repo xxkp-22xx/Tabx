@@ -1,0 +1,26 @@
+# Use the latest Node.js on Alpine Linux as the base image
+FROM node:alpine AS development
+
+# Declare environment variable
+ENV NODE_ENV development
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Copy package.json and package-lock.json first (to leverage caching)
+COPY package.json package-lock.json ./
+
+# Install dependencies
+RUN npm install --legacy-peer-deps
+
+# Copy the entire project directory
+COPY . .
+
+# Build the Next.js app
+RUN npm run build --legacy-peer-deps
+
+# Expose the default Next.js port
+EXPOSE 8080
+
+# Start the application
+CMD ["npm", "run", "dev"]
