@@ -21,4 +21,4 @@ jobs:
       run: sudo docker rm -f cicd-pipeline-container || true
 
     - name: Run the Docker container
-      run: sudo docker run -d -p 8080:8080 --name cicd-pipeline-container khwaeesh/cicd-pipeline:latest
+      run: sudo docker run -d -p 3001:3001 --name cicd-pipeline-container khwaeesh/cicd-pipeline:latest
