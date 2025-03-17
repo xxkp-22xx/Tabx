@@ -22,3 +22,6 @@ jobs:
 
     - name: Run the Docker container
       run: sudo docker run -d --name cicd-pipeline-container -p 3001:3001 khwaeesh/cicd-pipeline
+
+    - name: Check the running container
+      run: sudo docker ps
