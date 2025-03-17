@@ -22,4 +22,3 @@ jobs:
 
     - name: Run the Docker container
       run: sudo docker run -d -p 8080:8080 --name cicd-pipeline-container khwaeesh/cicd-pipeline:latest
-        
