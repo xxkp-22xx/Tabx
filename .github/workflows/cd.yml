@@ -14,6 +14,12 @@ jobs:
     runs-on: self-hosted
 
     steps:
+    - name: Login Dockerhub
+      env:
+          DOCKER_USERNAME: ${{secrets.DOCKER_USERNAME}}
+          DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
+      run: docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+
     - name: pull the Docker image from Docker Hub
       run: sudo docker pull khwaeesh/cicd-pipeline:latest
 
