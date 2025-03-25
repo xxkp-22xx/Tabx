@@ -24,10 +24,10 @@ jobs:
       run: sudo docker pull khwaeesh/cicd-pipeline:latest
 
     - name: Delete the old container
-      run: sudo docker rm -f cicd-pipeline-container || true
+      run: sudo docker rm -f myappcont || true
 
     - name: Run the Docker container
-      run: sudo docker run -d --name cicd-pipeline-container -p 3001:3001 khwaeesh/cicd-pipeline
+      run: sudo docker run -d --name myappcont -p 3001:3001 khwaeesh/cicd-pipeline
 
     - name: Check the running container
       run: sudo docker ps
