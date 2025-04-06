@@ -106,7 +106,7 @@ const AddExpense = () => {
         )
         .send({ 
           from: payerAddress,
-          gas: 900000 
+          gas: 500000 
         });
 
       setSuccess("Expense added successfully!");
@@ -120,104 +120,113 @@ const AddExpense = () => {
   };
 
   return (
-    <div className="tabx-container">
-      <h1 className="tabx-heading">Add New Expense</h1>
-      <h2 className="tabx-heading">Group ID: {groupId}</h2>
+    <div className="animated-gradient">
+      <div className="expense-form-container">
+        <h1 className="form-title">Add New Expense</h1>
+        <h2 className="form-subtitle">Group ID: {groupId}</h2>
 
-      {error && <div className="tabx-error">{error}</div>}
-      {success && <div className="tabx-status">{success}</div>}
+        {error && <div className="error-message">{error}</div>}
+        {success && <div className="success-message">{success}</div>}
 
-      <form onSubmit={handleSubmit}>
-        <div className="tabx-form-group">
-          <label className="tabx-label">Payer:</label>
-          <select
-            value={payerAddress}
-            onChange={(e) => handlePayerChange(e.target.value)}
-            className="tabx-select"
-          >
-            {groupMembers.map((member, i) => (
-              <option key={i} value={member.address}>
-                {member.username} ({member.address.substring(0, 8)}...)
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="tabx-form-group">
-          <label className="tabx-label">Amount (ETH):</label>
-          <input
-            type="number"
-            step="0.01"
-            min="0.01"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="tabx-input"
-            placeholder="Enter amount"
-          />
-        </div>
-
-        <div className="tabx-form-group">
-          <label className="tabx-label">Participants (including payer):</label>
-          <div className="tabx-member-selection">
+        <form onSubmit={handleSubmit} className="expense-form">
+          <div className="form-group">
+            <label className="form-label">Payer:</label>
             <select
-              value={selectedParticipant}
-              onChange={(e) => setSelectedParticipant(e.target.value)}
-              className="tabx-select"
+              value={payerAddress}
+              onChange={(e) => handlePayerChange(e.target.value)}
+              className="form-select"
             >
-              <option value="">Select participant</option>
               {groupMembers.map((member, i) => (
-                <option 
-                  key={i} 
-                  value={member.address}
-                  disabled={participants.includes(member.address)}
-                >
+                <option key={i} value={member.address}>
                   {member.username} ({member.address.substring(0, 8)}...)
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              onClick={handleAddParticipant}
-              className="tabx-secondary-btn"
-              disabled={!selectedParticipant}
-            >
-              Add
-            </button>
           </div>
-        </div>
 
-        <div className="tabx-form-group">
-          {participants.map((address, i) => {
-            const member = groupMembers.find(m => m.address === address);
-            const isPayer = address === payerAddress;
-            return (
-              <div key={i} className="tabx-member-item">
-                <span>
-                  {member?.username || address.substring(0, 8)}...
-                  {isPayer && " (payer)"}
-                </span>
-                {!isPayer && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveParticipant(i)}
-                    className="tabx-small-btn"
+          <div className="form-group">
+            <label className="form-label">Amount (ETH):</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="form-input"
+              placeholder="Enter amount"
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Participants (including payer):</label>
+            <div className="participant-selection">
+              <select
+                value={selectedParticipant}
+                onChange={(e) => setSelectedParticipant(e.target.value)}
+                className="form-select"
+              >
+                <option value="">Select participant</option>
+                {groupMembers.map((member, i) => (
+                  <option 
+                    key={i} 
+                    value={member.address}
+                    disabled={participants.includes(member.address)}
                   >
-                    Remove
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                    {member.username} ({member.address.substring(0, 8)}...)
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleAddParticipant}
+                className="btn-3d btn-add"
+                disabled={!selectedParticipant}
+              >
+                Add Participant
+              </button>
+            </div>
+          </div>
 
-        <button
-          type="submit"
-          className="tabx-primary-btn"
-          disabled={loading}
-        >
-          {loading ? "Processing..." : "Add Expense"}
-        </button>
-      </form>
+          <div className="participant-list">
+            {participants.map((address, i) => {
+              const member = groupMembers.find(m => m.address === address);
+              const isPayer = address === payerAddress;
+              return (
+                <div key={i} className="participant-item">
+                  <span className="participant-name">
+                    {member?.username || address.substring(0, 8)}...
+                    {isPayer && <span className="payer-badge"> (payer)</span>}
+                  </span>
+                  {!isPayer && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveParticipant(i)}
+                      className="btn-3d btn-remove"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <button
+            type="submit"
+            className="btn-3d btn-submit"
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <span className="spinner"></span>
+                Processing...
+              </>
+            ) : (
+              "Add Expense"
+            )}
+          </button>
+        </form>
+      </div>
     </div>
   );
 };

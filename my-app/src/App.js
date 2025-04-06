@@ -3,11 +3,14 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import GroupPage from './pages/group';
 import AddExpense from './pages/addExpense';
 import GroupDebts from './pages/groupDebts';
+import Layout from './components/Layout';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/" element={<Layout />} />
+
         <Route path="/groups" element={<GroupPage />} />
         
         <Route path="/groups/:groupId/add-expense" element={<AddExpense />} />
