@@ -1,5 +1,5 @@
-const TabxExpenseSharing = artifacts.require("TabxExpenseSharing");
+const TabX = artifacts.require("TabX");
 
 module.exports = function (deployer) {
-  deployer.deploy(TabxExpenseSharing);
+  deployer.deploy(TabX);
 };
