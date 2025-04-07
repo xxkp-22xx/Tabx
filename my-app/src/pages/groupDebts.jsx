@@ -4,7 +4,6 @@ import web3 from '../utils/web3';
 import contract from '../utils/contract';
 import "../styles/styles.css";
 
-
 const GroupDebts = () => {
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState(null);

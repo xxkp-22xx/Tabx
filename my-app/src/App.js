@@ -3,11 +3,12 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import GroupPage from './pages/group';
 import AddExpense from './pages/addExpense';
 import GroupDebts from './pages/groupDebts';
-import Layout from './components/Layout';
+import NavBar from './pages/Navbar';
 
 function App() {
   return (
     <BrowserRouter>
+          <NavBar />
       <Routes>
         {/* <Route path="/" element={<Layout />} /> */}
 
