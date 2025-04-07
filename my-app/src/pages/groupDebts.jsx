@@ -63,6 +63,8 @@ const GroupDebts = () => {
           user.username || member, 
           groupId
         ).call();
+
+        console.log(`Formatted balance for ${username}: ${formattedBalance}`);
         
         // Get detailed debts
         const userDebts = await contract.methods.getUserDebts(member, groupId).call();
@@ -144,9 +146,9 @@ const GroupDebts = () => {
                             ) : (
                               <>
                                 {debt.debtor === member.address ? (
-                                  <span>Owes {debt.amount} ETH to {debt.creditor.substring(0, 6)}...</span>
+                                  <span>Owes {debt.amount} ETH to {debt.creditor}...</span>
                                 ) : (
-                                  <span>Owed {debt.amount} ETH by {debt.debtor.substring(0, 6)}...</span>
+                                  <span>Owed {debt.amount} ETH by {debt.debtor}...</span>
                                 )}
                               </>
                             )}

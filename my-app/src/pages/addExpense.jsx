@@ -106,7 +106,7 @@ const AddExpense = () => {
         )
         .send({ 
           from: payerAddress,
-          gas: 900000 
+          gas: 3000000 
         });
 
       setSuccess("Expense added successfully!");
