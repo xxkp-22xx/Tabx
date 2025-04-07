@@ -7,7 +7,7 @@ import "../styles/styles.css";
 const GroupDebts = () => {
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState(null);
-  const [memberBalances, setMemberBalances] = useState([]);
+  const [memberDebts, setMemberDebts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -45,33 +45,45 @@ const GroupDebts = () => {
     fetchGroups();
   }, []);
 
-  const fetchMemberBalances = async (groupId) => {
+  const fetchMemberDebts = async (groupId) => {
     try {
       setLoading(true);
       setError('');
       
       const members = await contract.methods.getGroupMembers(groupId).call();
-      const balances = [];
+      const debts = [];
       
       for (const member of members) {
-        // Get user balance in the group
-        const balanceWei = await contract.methods.getUserBalance(member, groupId).call();
-        const balance = parseFloat(web3.utils.fromWei(balanceWei, 'ether')).toFixed(2);
-        
-        // Get user details
+        // Get formatted balance
         const user = await contract.methods.users(member).call();
+        const username = user.username || member.substring(0, 8) + '...';
         
-        balances.push({
-          username: user.username || member.substring(0, 8) + '...',
+        // Get formatted balance
+        const formattedBalance = await contract.methods.getUserBalanceFormatted(
+          user.username || member, 
+          groupId
+        ).call();
+        
+        // Get detailed debts
+        const userDebts = await contract.methods.getUserDebts(member, groupId).call();
+        
+        debts.push({
+          username,
           address: member,
-          balance: balance
+          formattedBalance,
+          debts: userDebts.map(debt => ({
+            creditor: debt.creditor,
+            debtor: debt.debtor,
+            amount: web3.utils.fromWei(debt.amount, 'ether'),
+            settled: debt.settled
+          }))
         });
       }
       
-      setMemberBalances(balances);
+      setMemberDebts(debts);
       setSelectedGroup(groupId);
     } catch (err) {
-      setError(`Failed to load member balances: ${err.message}`);
+      setError(`Failed to load member debts: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -95,7 +107,7 @@ const GroupDebts = () => {
             ← Back to Groups
           </button>
           
-          <h2 className="tabx-heading">Member Balances for Group #{selectedGroup}</h2>
+          <h2 className="tabx-heading">Member Debts for Group #{selectedGroup}</h2>
           
           <div className="tabx-table-container">
             <table className="tabx-table">
@@ -103,24 +115,44 @@ const GroupDebts = () => {
                 <tr>
                   <th className="tabx-th">Member</th>
                   <th className="tabx-th">Address</th>
-                  <th className="tabx-th">Balance (ETH)</th>
+                  <th className="tabx-th">Net Balance</th>
                   <th className="tabx-th">Status</th>
+                  <th className="tabx-th">Detailed Debts</th>
                 </tr>
               </thead>
               <tbody>
-                {memberBalances.map((member, i) => (
+                {memberDebts.map((member, i) => (
                   <tr key={i}>
                     <td className="tabx-td">{member.username}</td>
                     <td className="tabx-td">{member.address.substring(0, 8)}...</td>
-                    <td className="tabx-td">{member.balance}</td>
+                    <td className="tabx-td">{member.formattedBalance} ETH</td>
                     <td className="tabx-td">
-                      {parseFloat(member.balance) > 0 ? (
-                        <span style={{ color: 'green' }}>Owes you</span>
-                      ) : parseFloat(member.balance) < 0 ? (
+                      {member.formattedBalance.startsWith('-') ? (
                         <span style={{ color: 'red' }}>You owe</span>
-                      ) : (
+                      ) : member.formattedBalance === '0.00' ? (
                         <span>Settled</span>
+                      ) : (
+                        <span style={{ color: 'green' }}>Owes you</span>
                       )}
+                    </td>
+                    <td className="tabx-td">
+                      <div className="debts-details">
+                        {member.debts.map((debt, idx) => (
+                          <div key={idx} className="debt-item">
+                            {debt.settled ? (
+                              <span className="settled">Settled: </span>
+                            ) : (
+                              <>
+                                {debt.debtor === member.address ? (
+                                  <span>Owes {debt.amount} ETH to {debt.creditor.substring(0, 6)}...</span>
+                                ) : (
+                                  <span>Owed {debt.amount} ETH by {debt.debtor.substring(0, 6)}...</span>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -137,10 +169,10 @@ const GroupDebts = () => {
               <p>Members: {group.memberCount}</p>
               <p>Total Spent: {group.totalSpending} ETH</p>
               <button
-                onClick={() => fetchMemberBalances(group.id)}
+                onClick={() => fetchMemberDebts(group.id)}
                 className="tabx-primary-btn"
               >
-                View Balances
+                View Debts
               </button>
             </div>
           ))}

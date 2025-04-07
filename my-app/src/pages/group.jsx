@@ -2,21 +2,21 @@ import React, { useState, useEffect } from "react";
 import web3 from "../utils/web3";
 import contract from "../utils/contract";
 import "../styles/styles.css";
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+
 
 const GroupPage = () => {
   const [groupName, setGroupName] = useState("");
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
-  const [members, setMembers] = useState([]); // Now stores {username, address} objects
-  const [selectedMember, setSelectedMember] = useState("");
+  const [memberUsernames, setMemberUsernames] = useState([]);
+  const [selectedUsername, setSelectedUsername] = useState("");
   const [txStatus, setTxStatus] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [groups, setGroups] = useState([]);
   const [username, setUsername] = useState("");
   const [registeredUsers, setRegisteredUsers] = useState([]);
-  const navigate = useNavigate();
 
   useEffect(() => {
     const loadAccounts = async () => {
@@ -104,25 +104,6 @@ const GroupPage = () => {
     }
   };
 
-  const addMember = () => {
-    if (selectedMember && !members.some(m => m.address === selectedMember)) {
-      const user = registeredUsers.find(u => u.address === selectedMember);
-      if (user) {
-        setMembers([...members, {
-          username: user.username,
-          address: user.address
-        }]);
-        setSelectedMember("");
-      }
-    }
-  };
-
-  const removeMember = (index) => {
-    const updated = [...members];
-    updated.splice(index, 1);
-    setMembers(updated);
-  };
-
   const createGroup = async () => {
     if (!groupName.trim()) {
       setError("Group name is required");
@@ -140,29 +121,31 @@ const GroupPage = () => {
 
       const groupId = tx.events.GroupCreated.returnValues.groupId;
       
-      // Add members using their usernames
-      for (const member of members) {
-        try {
-          await contract.methods
-            .addGroupMember(groupId, member.username)
-            .send({ from: selectedAccount, gas: 300000 });
-        } catch (err) {
-          console.error(`Failed to add member ${member.username}:`, err);
+      // Add members
+      for (const username of memberUsernames) {
+        if (username.trim()) {
+          try {
+            await contract.methods
+              .addGroupMember(groupId, username)
+              .send({ from: selectedAccount, gas: 300000 });
+          } catch (err) {
+            console.error(`Failed to add member ${username}:`, err);
+          }
         }
       }
 
       // Refresh groups list
-      const memberAddresses = [selectedAccount, ...members.map(m => m.address)];
+      const members = [selectedAccount, ...memberUsernames.filter(u => u.trim())];
       setGroups([...groups, {
         id: groupId,
         name: groupName,
         owner: selectedAccount,
-        members: memberAddresses
+        members: members
       }]);
 
       setTxStatus(`Group "${groupName}" created successfully!`);
       setGroupName("");
-      setMembers([]);
+      setMemberUsernames([]);
     } catch (err) {
       setError(`Group creation failed: ${err.message}`);
     } finally {
@@ -170,8 +153,17 @@ const GroupPage = () => {
     }
   };
 
-  const viewGroupDebts = (groupId) => {
-    navigate(`/group-debts/${groupId}`);
+  const addMember = () => {
+    if (selectedUsername && !memberUsernames.includes(selectedUsername)) {
+      setMemberUsernames([...memberUsernames, selectedUsername]);
+      setSelectedUsername("");
+    }
+  };
+
+  const removeMember = (index) => {
+    const updated = [...memberUsernames];
+    updated.splice(index, 1);
+    setMemberUsernames(updated);
   };
 
   return (
@@ -248,34 +240,30 @@ const GroupPage = () => {
         <label className="tabx-label">Add Members:</label>
         <div className="tabx-member-selection">
           <select
-            value={selectedMember}
-            onChange={(e) => setSelectedMember(e.target.value)}
+            value={selectedUsername}
+            onChange={(e) => setSelectedUsername(e.target.value)}
             className="tabx-select"
           >
             <option value="">Select a user</option>
             {registeredUsers
-              .filter(user => !members.some(m => m.address === user.address))
+              .filter(user => !memberUsernames.includes(user.address))
               .map((user, i) => (
-                <option key={i} value={user.address}>
-                  {user.username} ({user.address.substring(0, 8)}...)
-                </option>
+                <option key={i} value={user.address}>{user.address}</option>
               ))}
           </select>
           <button
             onClick={addMember}
             className="tabx-secondary-btn"
-            disabled={!selectedMember}
+            disabled={!selectedUsername}
           >
             Add
           </button>
         </div>
       </div>
 
-      {members.map((member, i) => (
+      {memberUsernames.map((username, i) => (
         <div key={i} className="tabx-member-item">
-          <span>
-            {member.username} ({member.address.substring(0, 8)}...)
-          </span>
+          <span>{username}</span>
           <button
             onClick={() => removeMember(i)}
             className="tabx-small-btn"
@@ -302,30 +290,19 @@ const GroupPage = () => {
             <p>Owner: {group.owner}</p>
             <p>Members:</p>
             <ul>
-              {group.members.map((member, i) => {
-                const user = registeredUsers.find(u => u.address === member) || 
-                            { username: member.substring(0, 8) + '...', address: member };
-                return (
-                  <li key={i}>
-                    {user.username} ({user.address.substring(0, 8)}...)
-                  </li>
-                );
-              })}
+              {group.members.map((member, i) => (
+                <li key={i}>
+                  {registeredUsers.find(u => u.address === member)?.address || member}
+                </li>
+              ))}
             </ul>
-            <div className="group-actions">
-              <Link 
-                to={`/groups/${group.id}/add-expense`}
-                className="tabx-secondary-btn"
-              >
-                Add Expense
-              </Link>
-              <Link 
-                to={`/group-debts`}
-                className="tabx-secondary-btn"
-              >
-                Debts
-              </Link>
-            </div>
+            <Link 
+              to={`/groups/${group.id}/add-expense`}
+              className="tabx-secondary-btn"
+              style={{ display: 'inline-block', marginTop: '10px' }}
+            >
+              Add Expense
+            </Link>
           </div>
         ))
       ) : (
