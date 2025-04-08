@@ -12,26 +12,40 @@ const GroupDebts = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
+  const weiToEth = (weiValue, decimals = 2) => {
+    try {
+      if (weiValue === undefined || weiValue === null) return '0.00';
+      const weiString = typeof weiValue === 'object' ? weiValue.toString() : String(weiValue);
+      const cleanWei = weiString.split('.')[0];
+      const ethValue = web3.utils.fromWei(cleanWei, 'ether');
+      const parsed = parseFloat(ethValue);
+      if (isNaN(parsed)) return '0.00';
+      return parsed.toFixed(decimals);
+    } catch (err) {
+      console.error('Error converting wei to ETH:', err);
+      return '0.00';
+    }
+  };
+
   useEffect(() => {
     const fetchGroups = async () => {
       try {
         setLoading(true);
         const groupCount = await contract.methods.groupIdCounter().call();
         const loadedGroups = [];
-        
+
         for (let i = 1; i <= groupCount; i++) {
           const group = await contract.methods.groups(i).call();
           const members = await contract.methods.getGroupMembers(i).call();
-          
-          // Get total spending from the group's totalExpenses
-          const totalSpending = parseFloat(web3.utils.fromWei(group.totalExpenses, 'ether'));
-          
+          const totalSpending = web3.utils.fromWei(group.totalExpenses, 'ether');
+          console.log("Total Spending:", totalSpending);
+
           loadedGroups.push({
             id: i,
             name: group.name,
             owner: group.owner,
             memberCount: members.length,
-            totalSpending: totalSpending.toFixed(2)
+            totalSpending: totalSpending
           });
         }
         setGroups(loadedGroups);
@@ -49,26 +63,21 @@ const GroupDebts = () => {
     try {
       setLoading(true);
       setError('');
-      
+
       const members = await contract.methods.getGroupMembers(groupId).call();
       const debts = [];
-      
+
       for (const member of members) {
-        // Get formatted balance
         const user = await contract.methods.users(member).call();
         const username = user.username || member.substring(0, 8) + '...';
-        
-        // Get formatted balance
+
         const formattedBalance = await contract.methods.getUserBalanceFormatted(
-          user.username || member, 
+          user.username || member,
           groupId
         ).call();
 
-        console.log(`Formatted balance for ${username}: ${formattedBalance}`);
-        
-        // Get detailed debts
         const userDebts = await contract.methods.getUserDebts(member, groupId).call();
-        
+
         debts.push({
           username,
           address: member,
@@ -80,8 +89,9 @@ const GroupDebts = () => {
             settled: debt.settled
           }))
         });
+        console.log("Member Debts:", member, userDebts);
       }
-      
+
       setMemberDebts(debts);
       setSelectedGroup(groupId);
     } catch (err) {
@@ -91,26 +101,78 @@ const GroupDebts = () => {
     }
   };
 
+  const handleSettle = async (groupId, debtor, creditor) => {
+    try {
+      const accounts = await web3.eth.getAccounts();
+      const sender = accounts[0];
+  
+      // Ensure current user is the debtor
+      if (sender.toLowerCase() !== debtor.toLowerCase()) {
+        alert("Only the debtor can settle the debt.");
+        return;
+      }
+  
+      // Step 1: Get amount owed by debtor to creditor
+      const userDebts = await contract.methods.getUserDebts(debtor, groupId).call();
+      const targetDebt = userDebts.find(
+        debt => debt.creditor.toLowerCase() === creditor.toLowerCase() && !debt.settled
+      );
+  
+      if (!targetDebt) {
+        alert("Debt already settled or not found.");
+        return;
+      }
+  
+      const amountInWei = weiToEth(weiToEth(targetDebt.amount));
+      const amountInEth = web3.utils.fromWei(amountInWei, 'ether');
+      const ethamount = web3.utils.fromWei(amountInEth, 'ether');
+      console.log("Amount in Wei:", amountInWei);
+      console.log("Amount in ETH:", amountInEth);
+      console.log("Amount in ETH:", ethamount);
+  
+      // Step 2: Transfer ETH from debtor to creditor
+      await web3.eth.sendTransaction({
+        from: sender,
+        to: creditor,
+        value: amountInWei,
+        gas: 21000, // Default gas for a simple ETH transfer
+      });
+  
+      // Step 3: Call settleDebtByName on contract
+      await contract.methods.settleDebtByName(groupId, debtor, creditor)
+        .send({
+          from: sender,
+          gas: 5000000
+        });
+  
+      alert(`Debt of ${amountInEth} ETH settled successfully!`);
+      fetchMemberDebts(groupId);
+    } catch (err) {
+      console.error('Settle error:', err);
+      alert(`Failed to settle debt: ${err.message}`);
+    }
+  };
+  
   return (
     <div className="tabx-container">
       <h1 className="tabx-heading">Group Debts</h1>
-      
+
       {error && <div className="tabx-error">{error}</div>}
-      
+
       {loading ? (
         <div className="tabx-status">Loading...</div>
       ) : selectedGroup ? (
         <div>
-          <button 
+          <button
             onClick={() => setSelectedGroup(null)}
             className="tabx-secondary-btn"
             style={{ marginBottom: '20px' }}
           >
             ← Back to Groups
           </button>
-          
+
           <h2 className="tabx-heading">Member Debts for Group #{selectedGroup}</h2>
-          
+
           <div className="tabx-table-container">
             <table className="tabx-table">
               <thead>
@@ -127,7 +189,7 @@ const GroupDebts = () => {
                   <tr key={i}>
                     <td className="tabx-td">{member.username}</td>
                     <td className="tabx-td">{member.address.substring(0, 8)}...</td>
-                    <td className="tabx-td">{member.formattedBalance} ETH</td>
+                    <td className="tabx-td">{weiToEth(member.formattedBalance)} ETH</td>
                     <td className="tabx-td">
                       {member.formattedBalance.startsWith('-') ? (
                         <span style={{ color: 'red' }}>You owe</span>
@@ -146,10 +208,21 @@ const GroupDebts = () => {
                             ) : (
                               <>
                                 {debt.debtor === member.address ? (
-                                  <span>Owes {debt.amount} ETH to {debt.creditor}...</span>
+                                  <span>
+                                    Owes {weiToEth(debt.amount)} ETH to {debt.creditor.substring(0, 6)}...
+                                  </span>
                                 ) : (
-                                  <span>Owed {debt.amount} ETH by {debt.debtor}...</span>
+                                  <span>
+                                    Owed {weiToEth(debt.amount)} ETH by {debt.debtor.substring(0, 6)}...
+                                  </span>
                                 )}
+                                <button
+                                  className="tabx-secondary-btn"
+                                  style={{ marginLeft: '10px' }}
+                                  onClick={() => handleSettle(selectedGroup, debt.debtor, debt.creditor)}
+                                >
+                                  Settle
+                                </button>
                               </>
                             )}
                           </div>

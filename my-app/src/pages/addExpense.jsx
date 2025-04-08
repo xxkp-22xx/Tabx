@@ -89,6 +89,7 @@ const AddExpense = () => {
 
       // Convert amount to wei
       const amountInWei = web3.utils.toWei(amount, 'ether');
+      console.log("Amount in Wei:", amountInWei);
 
       // Get usernames from addresses
       const participantUsernames = await Promise.all(

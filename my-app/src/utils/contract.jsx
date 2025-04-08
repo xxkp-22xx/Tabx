@@ -830,7 +830,7 @@ import web3 from "./web3";
   }
 ]
 
-const address = "0x6fFE8D99C675558388facf9ADeC9cF50f41201a5";
+const address = "0x6F0cec51a35D749c5AC8aF43f87f0C4C93d051CA";
 
 const contract = new web3.eth.Contract(abi, address);
 
