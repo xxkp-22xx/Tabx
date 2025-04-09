@@ -47706,12 +47706,12 @@
     "5777": {
       "events": {},
       "links": {},
-      "address": "0x6fFE8D99C675558388facf9ADeC9cF50f41201a5",
-      "transactionHash": "0x9742febb59ee1a6650e9970e44c8db0603616fd0520f7a74376a02845384c0be"
+      "address": "0x6F0cec51a35D749c5AC8aF43f87f0C4C93d051CA",
+      "transactionHash": "0xa4cfc12d0a0e2ab2c5b49670292a6f7c6b43bf8e8ae9208f5d1993bc8c528672"
     }
   },
   "schemaVersion": "3.4.16",
-  "updatedAt": "2025-04-07T17:27:14.805Z",
+  "updatedAt": "2025-04-08T19:47:44.659Z",
   "networkType": "ethereum",
   "devdoc": {
     "kind": "dev",
