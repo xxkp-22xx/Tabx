@@ -8,6 +8,7 @@ import SettleDebtPage from './pages/SettlementPage';
 
 function App() {
   return (
+
     <BrowserRouter>
           <NavBar />
       <Routes>
