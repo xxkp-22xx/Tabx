@@ -43,49 +43,6 @@ import web3 from "./web3";
       },
       {
         "indexed": false,
-        "internalType": "address",
-        "name": "debtor",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "creditor",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "int256",
-        "name": "debtorBalance",
-        "type": "int256"
-      },
-      {
-        "indexed": false,
-        "internalType": "int256",
-        "name": "creditorBalance",
-        "type": "int256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "paymentSent",
-        "type": "uint256"
-      }
-    ],
-    "name": "DebugInfo",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "groupId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
         "internalType": "uint256",
         "name": "expenseId",
         "type": "uint256"
@@ -260,7 +217,8 @@ import web3 from "./web3";
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [],
@@ -273,7 +231,8 @@ import web3 from "./web3";
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [
@@ -312,7 +271,8 @@ import web3 from "./web3";
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [
@@ -356,7 +316,8 @@ import web3 from "./web3";
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [],
@@ -369,7 +330,8 @@ import web3 from "./web3";
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [
@@ -408,7 +370,8 @@ import web3 from "./web3";
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [
@@ -452,7 +415,8 @@ import web3 from "./web3";
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [
@@ -476,7 +440,8 @@ import web3 from "./web3";
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [
@@ -567,7 +532,8 @@ import web3 from "./web3";
       }
     ],
     "stateMutability": "pure",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [
@@ -585,12 +551,18 @@ import web3 from "./web3";
         "internalType": "string",
         "name": "creditorUsername",
         "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "paymentAmount",
+        "type": "uint256"
       }
     ],
     "name": "settleDebtByName",
     "outputs": [],
     "stateMutability": "payable",
-    "type": "function"
+    "type": "function",
+    "payable": true
   },
   {
     "inputs": [
@@ -603,7 +575,28 @@ import web3 from "./web3";
     "name": "settleAllDebts",
     "outputs": [],
     "stateMutability": "payable",
-    "type": "function"
+    "type": "function",
+    "payable": true
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "amountWei",
+        "type": "uint256"
+      }
+    ],
+    "name": "formatAmount",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [
@@ -621,40 +614,24 @@ import web3 from "./web3";
     "name": "getUserDebts",
     "outputs": [
       {
-        "components": [
-          {
-            "internalType": "address",
-            "name": "creditor",
-            "type": "address"
-          },
-          {
-            "internalType": "address",
-            "name": "debtor",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "amount",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "groupId",
-            "type": "uint256"
-          },
-          {
-            "internalType": "bool",
-            "name": "settled",
-            "type": "bool"
-          }
-        ],
-        "internalType": "struct TabX.Debt[]",
-        "name": "",
-        "type": "tuple[]"
+        "internalType": "address[]",
+        "name": "creditors",
+        "type": "address[]"
+      },
+      {
+        "internalType": "string[]",
+        "name": "amounts",
+        "type": "string[]"
+      },
+      {
+        "internalType": "bool[]",
+        "name": "settledStatus",
+        "type": "bool[]"
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [
@@ -673,12 +650,13 @@ import web3 from "./web3";
     "outputs": [
       {
         "internalType": "string",
-        "name": "balanceStr",
+        "name": "",
         "type": "string"
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [
@@ -692,17 +670,18 @@ import web3 from "./web3";
     "outputs": [
       {
         "internalType": "string[]",
-        "name": "balanceStrings",
+        "name": "",
         "type": "string[]"
       },
       {
         "internalType": "uint256[]",
-        "name": "groupIds",
+        "name": "",
         "type": "uint256[]"
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [
@@ -721,7 +700,8 @@ import web3 from "./web3";
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [
@@ -740,7 +720,8 @@ import web3 from "./web3";
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [
@@ -764,7 +745,8 @@ import web3 from "./web3";
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [
@@ -788,7 +770,8 @@ import web3 from "./web3";
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [
@@ -807,7 +790,8 @@ import web3 from "./web3";
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   },
   {
     "inputs": [
@@ -826,11 +810,12 @@ import web3 from "./web3";
       }
     ],
     "stateMutability": "view",
-    "type": "function"
+    "type": "function",
+    "constant": true
   }
 ]
 
-const address = "0x6F0cec51a35D749c5AC8aF43f87f0C4C93d051CA";
+const address = "0xD088304895f7d3Dd01f963b94f4C3A41C2e09533";
 
 const contract = new web3.eth.Contract(abi, address);
 
