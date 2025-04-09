@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import web3 from '../utils/web3';
 import contract from '../utils/contract';
 import "../styles/styles.css";
@@ -38,7 +38,6 @@ const GroupDebts = () => {
           const group = await contract.methods.groups(i).call();
           const members = await contract.methods.getGroupMembers(i).call();
           const totalSpending = web3.utils.fromWei(group.totalExpenses, 'ether');
-          console.log("Total Spending:", totalSpending);
 
           loadedGroups.push({
             id: i,
@@ -78,18 +77,29 @@ const GroupDebts = () => {
 
         const userDebts = await contract.methods.getUserDebts(member, groupId).call();
 
+        // Process each debt to get correct names
+        const processedDebts = await Promise.all(
+          userDebts.map(async (debt) => {
+            // Get creditor user details
+            const creditorUser = await contract.methods.users(debt.creditor).call();
+            // Get debtor user details
+            const debtorUser = await contract.methods.users(debt.debtor).call();
+            
+            return {
+              ...debt,
+              creditorName: creditorUser.username || debt.creditor.substring(0, 6) + '...',
+              debtorName: debtorUser.username || debt.debtor.substring(0, 6) + '...',
+              amountEth: web3.utils.fromWei(debt.amount, 'ether')
+            };
+          })
+        );
+
         debts.push({
           username,
           address: member,
           formattedBalance,
-          debts: userDebts.map(debt => ({
-            creditor: debt.creditor,
-            debtor: debt.debtor,
-            amount: web3.utils.fromWei(debt.amount, 'ether'),
-            settled: debt.settled
-          }))
+          debts: processedDebts
         });
-        console.log("Member Debts:", member, userDebts);
       }
 
       setMemberDebts(debts);
@@ -101,58 +111,6 @@ const GroupDebts = () => {
     }
   };
 
-  const handleSettle = async (groupId, debtor, creditor) => {
-    try {
-      const accounts = await web3.eth.getAccounts();
-      const sender = accounts[0];
-  
-      // Ensure current user is the debtor
-      if (sender.toLowerCase() !== debtor.toLowerCase()) {
-        alert("Only the debtor can settle the debt.");
-        return;
-      }
-  
-      // Step 1: Get amount owed by debtor to creditor
-      const userDebts = await contract.methods.getUserDebts(debtor, groupId).call();
-      const targetDebt = userDebts.find(
-        debt => debt.creditor.toLowerCase() === creditor.toLowerCase() && !debt.settled
-      );
-  
-      if (!targetDebt) {
-        alert("Debt already settled or not found.");
-        return;
-      }
-  
-      const amountInWei = weiToEth(weiToEth(targetDebt.amount));
-      const amountInEth = web3.utils.fromWei(amountInWei, 'ether');
-      const ethamount = web3.utils.fromWei(amountInEth, 'ether');
-      console.log("Amount in Wei:", amountInWei);
-      console.log("Amount in ETH:", amountInEth);
-      console.log("Amount in ETH:", ethamount);
-  
-      // Step 2: Transfer ETH from debtor to creditor
-      await web3.eth.sendTransaction({
-        from: sender,
-        to: creditor,
-        value: amountInWei,
-        gas: 21000, // Default gas for a simple ETH transfer
-      });
-  
-      // Step 3: Call settleDebtByName on contract
-      await contract.methods.settleDebtByName(groupId, debtor, creditor)
-        .send({
-          from: sender,
-          gas: 5000000
-        });
-  
-      alert(`Debt of ${amountInEth} ETH settled successfully!`);
-      fetchMemberDebts(groupId);
-    } catch (err) {
-      console.error('Settle error:', err);
-      alert(`Failed to settle debt: ${err.message}`);
-    }
-  };
-  
   return (
     <div className="tabx-container">
       <h1 className="tabx-heading">Group Debts</h1>
@@ -209,20 +167,27 @@ const GroupDebts = () => {
                               <>
                                 {debt.debtor === member.address ? (
                                   <span>
-                                    Owes {weiToEth(debt.amount)} ETH to {debt.creditor.substring(0, 6)}...
+                                    Owes {weiToEth(debt.amount)} ETH to {debt.creditorName}
                                   </span>
                                 ) : (
                                   <span>
-                                    Owed {weiToEth(debt.amount)} ETH by {debt.debtor.substring(0, 6)}...
+                                    Owed {weiToEth(debt.amount)} ETH by {debt.debtorName}
                                   </span>
                                 )}
-                                <button
+                                <Link
+                                  to={`/groups/${selectedGroup}/settle`}
+                                  state={{
+                                    groupId: selectedGroup,
+                                    debtor: debt.debtorName,
+                                    creditor: debt.creditorName,
+                                    amount: debt.amount,
+                                    amountEth: debt.amountEth
+                                  }}
                                   className="tabx-secondary-btn"
                                   style={{ marginLeft: '10px' }}
-                                  onClick={() => handleSettle(selectedGroup, debt.debtor, debt.creditor)}
                                 >
                                   Settle
-                                </button>
+                                </Link>
                               </>
                             )}
                           </div>

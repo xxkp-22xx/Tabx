@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import web3 from '../utils/web3';
 import contract from '../utils/contract';
@@ -7,10 +7,35 @@ import "../styles/styles.css";
 const SettlePage = () => {
   const { state } = useLocation();
   const navigate = useNavigate();
-  const [amountWei, setAmountWei] = useState(state?.amount || '');
+  const [amountWei, setAmountWei] = useState('');
+  const [maxDebtWei, setMaxDebtWei] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [bal, setBal] = useState('');
+
+  useEffect(() => {
+    const fetchDebtAmount = async () => {
+      try {
+        console.log("Debtor address:", state.debtor);
+        const balance = await contract.methods.getUserBalanceFormatted(state.debtor, state.groupId).call();
+        const bal = web3.utils.fromWei(parseInt(balance), 'ether');
+        console.log("Fetched balance:", balance);
+        console.log("Converted balance ETH:", bal);
+        
+        // Convert negative balance (debt) to positive wei amount
+        setMaxDebtWei(balance);
+        setBal(bal);
+        
+        // Set default amount to full debt (or empty if no debt)
+        // setAmountWei(debtWei === '0' ? '' : debtWei);
+      } catch (err) {
+        console.error("Failed to fetch debt amount:", err);
+      }
+    };
+
+    fetchDebtAmount();
+  }, [state.debtor, state.groupId]);
 
   const handleSettle = async (e) => {
     e.preventDefault();
@@ -19,9 +44,15 @@ const SettlePage = () => {
       setError('');
       setSuccess('');
 
-      // Basic validation
-      if (!amountWei || isNaN(amountWei)) {
-        throw new Error('Please enter a valid amount in wei');
+      // Convert amount to number for validation
+      const amount = Number(amountWei);
+      if (!amount || isNaN(amount) || amount <= 0) {
+        throw new Error('Please enter a valid positive amount');
+      }
+
+      // Validate against max debt
+      if (amount > Number(maxDebtWei)) {
+        throw new Error(`Amount exceeds your debt of ${web3.utils.fromWei(maxDebtWei, 'ether')} ETH`);
       }
 
       const accounts = await web3.eth.getAccounts();
@@ -29,11 +60,11 @@ const SettlePage = () => {
 
       // Verify account has sufficient balance
       const balance = await web3.eth.getBalance(currentAccount);
-      if (Number(balance) < Number(amountWei)) {
+      if (Number(balance) < amount) {
         throw new Error(`Insufficient balance. You need at least ${web3.utils.fromWei(amountWei, 'ether')} ETH`);
       }
 
-      // Execute transaction with fixed gas
+      // Execute transaction
       const receipt = await contract.methods.settleDebtByName(
         state.groupId,
         state.debtor,
@@ -42,16 +73,14 @@ const SettlePage = () => {
       ).send({ 
         from: currentAccount, 
         value: amountWei,
-        gas: 3000000 // Fixed gas limit
+        gas: 3000000
       });
-      console.log('Transaction receipt:', receipt);
 
       setSuccess(`
         Debt settled successfully!
         Amount: ${web3.utils.fromWei(amountWei, 'ether')} ETH
       `);
       
-      // Refresh after 3 seconds
       setTimeout(() => {
         navigate(`/groups/${state.groupId}/debts`);
       }, 3000);
@@ -59,12 +88,11 @@ const SettlePage = () => {
     } catch (err) {
       let errorMessage = err.message;
       
-      // Simplify error parsing
       if (errorMessage.includes("revert")) {
         if (errorMessage.includes("Debtor username not found")) errorMessage = "Debtor not found";
         else if (errorMessage.includes("Creditor username not found")) errorMessage = "Creditor not found";
-        else if (errorMessage.includes("Debtor balance")) errorMessage = "Debtor doesn't owe this amount";
-        else if (errorMessage.includes("Creditor balance")) errorMessage = "Creditor can't receive this amount";
+        else if (errorMessage.includes("Debtor has no debt")) errorMessage = "You don't owe this amount";
+        else if (errorMessage.includes("Creditor is not owed")) errorMessage = "Creditor can't receive this amount";
         else if (errorMessage.includes("Cannot pay yourself")) errorMessage = "Can't pay yourself";
       }
       
@@ -91,7 +119,7 @@ const SettlePage = () => {
         <h2>Debt Details</h2>
         <p><strong>Group:</strong> {state.groupId}</p>
         <p><strong>You Owe To:</strong> {state.creditor}</p>
-        <p><strong>Total Debt:</strong> {state.amountEth} ETH</p>
+        <p><strong>Total Debt:</strong> {maxDebtWei} WEI,  {bal} ETH</p>
       </div>
 
       <form onSubmit={handleSettle} className="settle-form">
@@ -101,7 +129,7 @@ const SettlePage = () => {
             type="text"
             value={amountWei}
             onChange={(e) => setAmountWei(e.target.value)}
-            placeholder={`Max: ${state.amount} wei`}
+            placeholder={`Max: ${maxDebtWei} wei`}
             required
           />
           <small className="eth-value">
