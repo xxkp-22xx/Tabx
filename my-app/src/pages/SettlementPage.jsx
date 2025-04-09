@@ -19,12 +19,13 @@ const SettlePage = () => {
       try {
         console.log("Debtor address:", state.debtor);
         const balance = await contract.methods.getUserBalanceFormatted(state.debtor, state.groupId).call();
+        const ParsedBalWei = parseInt(balance)
         const bal = web3.utils.fromWei(parseInt(balance), 'ether');
-        console.log("Fetched balance:", balance);
+        console.log("Fetched balance:", ParsedBalWei);
         console.log("Converted balance ETH:", bal);
         
         // Convert negative balance (debt) to positive wei amount
-        setMaxDebtWei(balance);
+        setMaxDebtWei(ParsedBalWei);
         setBal(bal);
         
         // Set default amount to full debt (or empty if no debt)
