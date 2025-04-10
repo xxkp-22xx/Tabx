@@ -1,0 +1,33 @@
+name: CD pipeline
+
+# Only trigger, when the build workflow succeeded
+on:
+    workflow_run:
+      workflows: ["CI pipeline"]
+      types:
+        - completed
+
+jobs:
+
+  build:
+
+    runs-on: self-hosted
+
+    steps:
+    - name: Login Dockerhub
+      env:
+          DOCKER_USERNAME: ${{secrets.DOCKER_USERNAME}}
+          DOCKER_PASSWORD: ${{secrets.DOCKER_PASSWORD}}
+      run: docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+
+    - name: pull the Docker image from Docker Hub
+      run: sudo docker pull khwaeesh/cicd-pipeline:latest
+
+    - name: Delete the old container
+      run: sudo docker rm -f myappcont || true
+
+    - name: Run the Docker container
+      run: sudo docker run -d --name myappcont -p 3001:3001 khwaeesh/cicd-pipeline
+
+    - name: Check the running container
+      run: sudo docker ps
