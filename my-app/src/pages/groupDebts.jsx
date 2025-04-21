@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import web3 from '../utils/web3';
@@ -63,6 +64,7 @@ const GroupDebtsPage = () => {
           const debtsData = await contract.methods.getUserDebts(currentUser, i).call();
           const creditors = debtsData[0];
           const amounts = debtsData[1];
+          console.log(amounts);
           const settledStatus = debtsData[2];
 
           for (let j = 0; j < creditors.length; j++) {
@@ -283,9 +285,11 @@ const GroupDebtsPage = () => {
           {userDebtOverview.map((debt, index) => (
             <div key={index} className="tabx-debt-entry">
               <p><strong>Group ID:</strong> {debt.groupId}</p>
-              <p><strong>Owes:</strong> {web3.utils.fromWei(debt.amount.split('.')[0] || '0', 'ether')} ETH</p>
-              <p><strong>To:</strong> {debt.creditorUsername}</p>
-              <p><strong>Settled:</strong> {debt.settled ? 'Yes' : 'No'}</p>
+              <p><strong>Owes:</strong> {
+              web3.utils.fromWei(debt.amount.split('.')[0] || '0', 'ether')} ETH {console.log(debt.amountWei)}</p>
+              <p><strong>To:</strong> {debt.creditorUsername} </p>
+              <p><strong>Settled:</strong> {debt.settled ? 'Yes' : 'No'} </p>
+
             </div>
           ))}
         </div>

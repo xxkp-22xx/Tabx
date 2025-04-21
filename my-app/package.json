@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "bn.js": "^5.2.1",
     "cra-template": "1.2.0",
     "docker": "^1.0.0",
     "ethers": "^6.13.5",

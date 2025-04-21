@@ -269,6 +269,11 @@ import web3 from "./web3";
         "internalType": "bool",
         "name": "settled",
         "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -368,6 +373,11 @@ import web3 from "./web3";
         "internalType": "bool",
         "name": "settled",
         "type": "bool"
+      },
+      {
+        "internalType": "uint256",
+        "name": "timestamp",
+        "type": "uint256"
       }
     ],
     "stateMutability": "view",
@@ -499,6 +509,26 @@ import web3 from "./web3";
     "inputs": [
       {
         "internalType": "uint256",
+        "name": "amountWei",
+        "type": "uint256"
+      }
+    ],
+    "name": "formatAmount",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function",
+    "constant": true
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
         "name": "groupId",
         "type": "uint256"
       }
@@ -618,6 +648,31 @@ import web3 from "./web3";
         "type": "uint256"
       }
     ],
+    "name": "getUserBalanceFormatted",
+    "outputs": [
+      {
+        "internalType": "string",
+        "name": "",
+        "type": "string"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function",
+    "constant": true
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      }
+    ],
     "name": "getUserDebts",
     "outputs": [
       {
@@ -634,6 +689,116 @@ import web3 from "./web3";
         "internalType": "bool[]",
         "name": "settledStatus",
         "type": "bool[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function",
+    "constant": true
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getUserAllDebts",
+    "outputs": [
+      {
+        "internalType": "address[]",
+        "name": "creditors",
+        "type": "address[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "amounts",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "bool[]",
+        "name": "settledStatus",
+        "type": "bool[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "timestamps",
+        "type": "uint256[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function",
+    "constant": true
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      }
+    ],
+    "name": "getUserDebtHistory",
+    "outputs": [
+      {
+        "internalType": "uint256[]",
+        "name": "groupIds",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "address[]",
+        "name": "counterparties",
+        "type": "address[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "amounts",
+        "type": "uint256[]"
+      },
+      {
+        "internalType": "bool[]",
+        "name": "isCreditor",
+        "type": "bool[]"
+      },
+      {
+        "internalType": "bool[]",
+        "name": "settledStatus",
+        "type": "bool[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "timestamps",
+        "type": "uint256[]"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function",
+    "constant": true
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "string",
+        "name": "username",
+        "type": "string"
+      }
+    ],
+    "name": "getAllUserBalancesFormatted",
+    "outputs": [
+      {
+        "internalType": "string[]",
+        "name": "",
+        "type": "string[]"
+      },
+      {
+        "internalType": "uint256[]",
+        "name": "",
+        "type": "uint256[]"
       }
     ],
     "stateMutability": "view",
@@ -663,42 +828,32 @@ import web3 from "./web3";
   {
     "inputs": [
       {
-        "internalType": "uint256",
-        "name": "amountWei",
-        "type": "uint256"
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
       }
     ],
-    "name": "formatAmount",
+    "name": "getFormattedDebts",
     "outputs": [
       {
-        "internalType": "string",
-        "name": "",
-        "type": "string"
-      }
-    ],
-    "stateMutability": "pure",
-    "type": "function",
-    "constant": true
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "username",
-        "type": "string"
-      }
-    ],
-    "name": "getAllUserBalancesFormatted",
-    "outputs": [
+        "internalType": "uint256[]",
+        "name": "amountsWei",
+        "type": "uint256[]"
+      },
       {
         "internalType": "string[]",
-        "name": "",
+        "name": "amountsFormatted",
         "type": "string[]"
       },
       {
         "internalType": "uint256[]",
-        "name": "",
+        "name": "groupIds",
         "type": "uint256[]"
+      },
+      {
+        "internalType": "bool[]",
+        "name": "settledStatus",
+        "type": "bool[]"
       }
     ],
     "stateMutability": "view",
@@ -707,7 +862,7 @@ import web3 from "./web3";
   }
 ]
 
-const address = "0x0B4e8117aFeE4bBfdBcE98d61b263eBbdc0fAB23";
+const address = "0x90B66A3d831A589660AA8F0B4B30640D3e79cd42";
 
 const contract = new web3.eth.Contract(abi, address);
 
