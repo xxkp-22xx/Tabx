@@ -397,7 +397,7 @@ import web3 from "./web3";
   }
 ]
 
-const address = "0x282a760bC76181efc653c70410BB583FdCcB48fF";
+const address = "0x17273EDAAC71fbD1E3De997e7E197A43F4eC2F75";
 
 const contract = new web3.eth.Contract(abi, address);
 

@@ -8,8 +8,13 @@ import Group    from './models/Group.js';
 import Expense  from './models/Expense.js';
 import Debt     from './models/Debt.js';
 
+import groupRoutes from './routes/Group.js';
+
 const app = express();
 app.use(cors());
+
+app.use('/api/groups', groupRoutes);
+
 app.use(express.json());
 
 // Connect to MongoDB Atlas
@@ -98,6 +103,16 @@ app.patch('/api/debts/:id', async (req, res) => {
   const debt = await Debt.findByIdAndUpdate(req.params.id, req.body, { new: true });
   res.json(debt);
 });
+
+mongoose.connect('mongodb+srv://khwaeeshpatel07:zFXnWzi63llICAUD@cluster0.7zgrqoj.mongodb.net/tabx?retryWrites=true&w=majority&appName=Cluster0')
+  .then(() => console.log('✅ MongoDB connected correctly'))
+  .catch(err => console.error('🚨 MongoDB connection error:', err));
+
+  mongoose.connection.once('open', () => {
+    console.log('Connected to MongoDB Atlas');
+    console.log('Database name:', mongoose.connection.name);  // Shows exact DB you're connected to
+  });
+  
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`Server listening on ${PORT}`));
