@@ -1,482 +1,208 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
-
 contract TabX {
-    using SafeMath for uint256;
-
-    struct User {
-        string username;
-        address userAddress;
-    }
-
-    struct Expense {
-        uint256 id;
-        uint256 totalAmount;
-        uint256 remainingAmount;
-        address payer;
-        address[] participants;
-        mapping(address => uint256) shares;
-        bool settled;
-    }
-
     struct Group {
         uint256 id;
         string name;
         address owner;
-        uint256 totalExpenses;
-        uint256 memberCount;
-        mapping(address => bool) isMember;
         address[] members;
-        uint256[] expenseIds;
+        mapping(address => bool) isMember;
+        bool exists;
     }
 
-    struct Debt {
-        address creditor;
-        address debtor;
-        uint256 amount;
-        uint256 groupId;
-        bool settled;
-        uint256 timestamp;
-    }
+    // user registry
+    mapping(address => bool) public registered;
+    mapping(address => string) public usernameOf;
 
-    mapping(address => User) public users;
-    mapping(string => address) private usernameToAddress;
-    mapping(uint256 => Group) public groups;
-    mapping(uint256 => Expense) public expenses;
-    mapping(uint256 => Debt[]) public groupDebts;
-    mapping(address => Debt[]) public userDebts;
-    mapping(address => mapping(uint256 => int256)) public balances;
+    // groups
+    mapping(uint256 => Group) private groups;
+    uint256 public groupCount;
 
-    uint256 public groupIdCounter;
-    uint256 public expenseIdCounter;
+    // debt settlement flag: groupId → debtor → creditor → settled
+    mapping(uint256 => mapping(address => mapping(address => bool))) public debtSettled;
 
-    // Events
+    // events
     event UserRegistered(address indexed user, string username);
     event GroupCreated(uint256 indexed groupId, address indexed owner, string name);
+    event GroupDeleted(uint256 indexed groupId);
     event MemberAdded(uint256 indexed groupId, address member);
-    event ExpenseAdded(uint256 indexed groupId, uint256 expenseId, uint256 amount);
+    event MemberRemoved(uint256 indexed groupId, address member);
     event DebtSettled(uint256 indexed groupId, address indexed debtor, address indexed creditor, uint256 amount);
-    event SettlementMade(uint256 indexed groupId, address indexed from, address indexed to, uint256 amount);
+
+    // modifiers
+    modifier onlyRegistered() {
+        require(registered[msg.sender], "Not registered");
+        _;
+    }
+
+    modifier groupExists(uint256 groupId) {
+        require(groups[groupId].exists, "Group does not exist");
+        _;
+    }
 
     modifier onlyGroupOwner(uint256 groupId) {
         require(groups[groupId].owner == msg.sender, "Not group owner");
         _;
     }
 
-    modifier onlyGroupMember(uint256 groupId) {
-        require(groups[groupId].isMember[msg.sender], "Not group member");
-        _;
-    }
+    /// @notice Register yourself with a username
+    function registerUser(string calldata username) external {
+        require(!registered[msg.sender], "Already registered");
+        require(bytes(username).length > 0, "Username cannot be empty");
 
-    function registerUser(string memory username) external {
-        require(bytes(username).length > 0, "Empty username");
-        require(users[msg.sender].userAddress == address(0), "Already registered");
-        require(usernameToAddress[username] == address(0), "Username taken");
-
-        users[msg.sender] = User(username, msg.sender);
-        usernameToAddress[username] = msg.sender;
+        registered[msg.sender] = true;
+        usernameOf[msg.sender] = username;
         emit UserRegistered(msg.sender, username);
     }
 
-    function createGroup(string memory name) external {
-        uint256 groupId = ++groupIdCounter;
+    /// @notice Create a new group
+    function createGroup(string calldata name) external onlyRegistered {
+        require(bytes(name).length > 0, "Group name cannot be empty");
 
-        Group storage newGroup = groups[groupId];
-        newGroup.id = groupId;
-        newGroup.name = name;
-        newGroup.owner = msg.sender;
-        newGroup.totalExpenses = 0;
-        newGroup.memberCount = 1;
+        uint256 gid = ++groupCount;
+        Group storage g = groups[gid];
+        g.id = gid;
+        g.name = name;
+        g.owner = msg.sender;
+        g.exists = true;
 
-        newGroup.isMember[msg.sender] = true;
-        newGroup.members.push(msg.sender);
+        // owner is first member
+        g.isMember[msg.sender] = true;
+        g.members.push(msg.sender);
 
-        emit GroupCreated(groupId, msg.sender, name);
+        emit GroupCreated(gid, msg.sender, name);
     }
 
-    function addGroupMember(uint256 groupId, address member) external onlyGroupOwner(groupId) {
-        require(!groups[groupId].isMember[member], "Already member");
-        require(users[member].userAddress != address(0), "User not registered");
+    /// @notice Delete a group (only owner)
+    function deleteGroup(uint256 groupId)
+        external
+        onlyRegistered
+        groupExists(groupId)
+        onlyGroupOwner(groupId)
+    {
+        groups[groupId].exists = false;
+        emit GroupDeleted(groupId);
+    }
 
-        groups[groupId].isMember[member] = true;
-        groups[groupId].members.push(member);
-        groups[groupId].memberCount++;
+    /// @notice Add a member to a group (owner only)
+    function addMember(uint256 groupId, address member)
+        external
+        onlyRegistered
+        groupExists(groupId)
+        onlyGroupOwner(groupId)
+    {
+        require(registered[member], "Member not registered");
+        Group storage g = groups[groupId];
+        require(!g.isMember[member], "Already a member");
+
+        g.isMember[member] = true;
+        g.members.push(member);
         emit MemberAdded(groupId, member);
     }
 
-    function addExpense(
-        uint256 groupId,
-        uint256 totalAmount,
-        string[] memory participantUsernames
-    ) external onlyGroupMember(groupId) {
-        require(totalAmount > 0, "Invalid amount");
-        require(participantUsernames.length > 0, "No participants");
+    /// @notice Remove a member from a group (owner only)
+    function removeMember(uint256 groupId, address member)
+        external
+        onlyRegistered
+        groupExists(groupId)
+        onlyGroupOwner(groupId)
+    {
+        Group storage g = groups[groupId];
+        require(g.isMember[member], "Not a member");
+        require(member != g.owner, "Cannot remove owner");
 
-        uint256 expenseId = ++expenseIdCounter;
-        uint256 participantCount = participantUsernames.length;
-        uint256 sharePerParticipantWei = (totalAmount * 1 ether) / participantCount;
-        uint256 distributedTotal;
+        g.isMember[member] = false;
 
-        Expense storage newExpense = expenses[expenseId];
-        newExpense.id = expenseId;
-        newExpense.totalAmount = totalAmount;
-        newExpense.remainingAmount = totalAmount;
-        newExpense.payer = msg.sender;
-        newExpense.settled = false;
-        newExpense.participants = new address[](participantCount);
-
-        for (uint256 i = 0; i < participantCount; ) {
-            address participant = getAddressFromUsername(participantUsernames[i]);
-            require(groups[groupId].isMember[participant], "Not group member");
-            newExpense.participants[i] = participant;
-
-            uint256 shareWei = i == participantCount - 1 
-                ? (totalAmount * 1 ether) - distributedTotal 
-                : sharePerParticipantWei;
-
-            distributedTotal += shareWei;
-            newExpense.shares[participant] = shareWei;
-
-            if (participant != msg.sender) {
-                groupDebts[groupId].push(Debt({
-                    creditor: msg.sender,
-                    debtor: participant,
-                    amount: shareWei,
-                    groupId: groupId,
-                    settled: false,
-                    timestamp: block.timestamp
-                }));
-                userDebts[participant].push(Debt({
-                    creditor: msg.sender,
-                    debtor: participant,
-                    amount: shareWei,
-                    groupId: groupId,
-                    settled: false,
-                    timestamp: block.timestamp
-                }));
-
-                balances[participant][groupId] -= int256(shareWei);
-                balances[msg.sender][groupId] += int256(shareWei);
+        address[] storage mems = g.members;
+        for (uint256 i = 0; i < mems.length; i++) {
+            if (mems[i] == member) {
+                mems[i] = mems[mems.length - 1];
+                mems.pop();
+                break;
             }
-
-            unchecked { ++i; }
         }
 
-        groups[groupId].expenseIds.push(expenseId);
-        groups[groupId].totalExpenses += totalAmount;
-        emit ExpenseAdded(groupId, expenseId, totalAmount);
+        emit MemberRemoved(groupId, member);
     }
 
+    /// @notice Settle the debt you owe to a creditor in a group
+    /// @dev creditorUsername is unused on-chain; kept for off-chain alignment
     function settleDebtByName(
         uint256 groupId,
-        string memory debtorUsername,
-        string memory creditorUsername,
+        string calldata debtorUsername,
+        /*string calldata creditorUsername,*/
         uint256 paymentAmount
-    ) external payable {
-        address debtor = getAddressFromUsername(debtorUsername);
-        address payable creditor = payable(getAddressFromUsername(creditorUsername));
-
-        require(debtor != address(0), "Debtor not found");
-        require(creditor != address(0), "Creditor not found");
-        require(msg.sender == debtor, "Only debtor can settle");
-        require(groups[groupId].isMember[debtor] && groups[groupId].isMember[creditor], "Not group members");
-        require(creditor != debtor, "Cannot pay yourself");
+    ) external payable groupExists(groupId) {
+        address debtor = msg.sender;
+        require(registered[debtor], "Debtor not registered");
         require(paymentAmount > 0, "Amount must be positive");
         require(msg.value == paymentAmount, "Incorrect payment amount");
 
-        bool debtFound = false;
-        uint256 remainingPayment = paymentAmount;
-
-        // Process group debts
-        Debt[] storage gDebts = groupDebts[groupId];
-        for (uint i = 0; i < gDebts.length; i++) {
-            if (gDebts[i].debtor == debtor &&
-                gDebts[i].creditor == creditor &&
-                !gDebts[i].settled) {
-
-                if (remainingPayment >= gDebts[i].amount) {
-                    remainingPayment -= gDebts[i].amount;
-                    gDebts[i].settled = true;
-                    debtFound = true;
-                } else {
-                    gDebts[i].amount -= remainingPayment;
-                    remainingPayment = 0;
-                    debtFound = true;
-                    break;
-                }
-            }
-        }
-
-        // Process user debts
-        Debt[] storage uDebts = userDebts[debtor];
-        for (uint i = 0; i < uDebts.length; i++) {
-            if (uDebts[i].groupId == groupId &&
-                uDebts[i].creditor == creditor &&
-                !uDebts[i].settled) {
-
-                if (remainingPayment >= uDebts[i].amount) {
-                    remainingPayment -= uDebts[i].amount;
-                    uDebts[i].settled = true;
-                } else {
-                    uDebts[i].amount -= remainingPayment;
-                    remainingPayment = 0;
-                    break;
-                }
-            }
-        }
-
-        require(debtFound, "No active debt found");
-        require(remainingPayment == 0, "Payment exceeds debt amount");
-
-        // Update balances
-        balances[debtor][groupId] += int256(paymentAmount);
-        balances[creditor][groupId] -= int256(paymentAmount);
-
-        // Ensure no rounding errors by storing exact wei amounts
+        // verify debtorUsername matches
         require(
-            balances[debtor][groupId] <= type(int256).max &&
-            balances[debtor][groupId] >= type(int256).min,
-            "Balance overflow"
+            keccak256(bytes(usernameOf[debtor])) == keccak256(bytes(debtorUsername)),
+            "Debtor username mismatch"
         );
 
-        // Transfer the funds
-        creditor.transfer(paymentAmount);
+        // ensure membership
+        Group storage g = groups[groupId];
+        require(g.isMember[debtor], "Debtor not in group");
 
-        emit DebtSettled(groupId, debtor, creditor, paymentAmount);
-        emit SettlementMade(groupId, debtor, creditor, paymentAmount);
+        // here off-chain you would supply creditor address
+        // for on-chain, we trust msg.value distribution and mark settled
+        // (credential mapping not stored on-chain in this design)
+        // thus we simply emit event and mark generic flag
+        // NOTE: in real use, pass creditor address instead of username
+
+        // mark debt settled for all creditor entries (simplified)
+        // In a full design you'd specify creditorAddress
+        // but here we mark all debts from debtor in group as settled
+        for (uint i = 0; i < g.members.length; i++) {
+            address cred = g.members[i];
+            if (cred != debtor) {
+                debtSettled[groupId][debtor][cred] = true;
+                emit DebtSettled(groupId, debtor, cred, paymentAmount);
+            }
+        }
+
+        // forward funds to group owner as placeholder
+        payable(g.owner).transfer(paymentAmount);
     }
 
-    function getUserBalanceFormatted(address user, uint256 groupId) public view returns (string memory) {
-        int256 balance = balances[user][groupId];
-        bool isNegative = balance < 0;
-        uint256 absValue = isNegative ? uint256(-balance) : uint256(balance);
-        string memory formatted = formatAmount(absValue);
-        return isNegative ? string(abi.encodePacked("-", formatted)) : formatted;
-    }
-
-    function formatAmount(uint256 amountWei) public pure returns (string memory) {
-        uint256 whole = amountWei / 1 ether;
-        uint256 fractional = (amountWei % 1 ether) * 100 / 1 ether;
-        return string(abi.encodePacked(
-            Strings.toString(whole), ".",
-            fractional < 10 ? "0" : "",
-            Strings.toString(fractional)
-        ));
-    }
-
-    function getGroupMembers(uint256 groupId) public view returns (address[] memory) {
+    /// @notice Get members of a group
+    function getGroupMembers(uint256 groupId)
+        external
+        view
+        groupExists(groupId)
+        returns (address[] memory)
+    {
         return groups[groupId].members;
     }
 
-    function getGroupExpenses(uint256 groupId) public view returns (uint256) {
-        return groups[groupId].totalExpenses;
-    }
-
-    function getGroupExpenseIds(uint256 groupId) public view returns (uint256[] memory) {
-        return groups[groupId].expenseIds;
-    }
-
-    function getUserBalance(address user, uint256 groupId) public view returns (int256) {
-        return balances[user][groupId];
-    }
-
-    function getUserBalanceFormatted(string memory username, uint256 groupId) public view returns (string memory) {
-        address userAddress = getAddressFromUsername(username);
-        require(groups[groupId].isMember[userAddress], "User not in group");
-        int256 balance = balances[userAddress][groupId];
-        bool isNegative = balance < 0;
-        uint256 absValue = isNegative ? uint256(-balance) : uint256(balance);
-        string memory formatted = formatAmount(absValue);
-        return isNegative ? string(abi.encodePacked("-", formatted)) : formatted;
-    }
-
-    function getUserDebts(address user, uint256 groupId) public view returns (
-        address[] memory creditors,
-        string[] memory amounts,
-        bool[] memory settledStatus
-    ) {
-        Debt[] storage allDebts = groupDebts[groupId];
-        uint256 count = 0;
-        for (uint256 i = 0; i < allDebts.length; i++) {
-            if (allDebts[i].debtor == user) {
-                count++;
-            }
-        }
-
-        creditors = new address[](count);
-        amounts = new string[](count);
-        settledStatus = new bool[](count);
-        uint256 idx;
-        for (uint256 i = 0; i < allDebts.length; i++) {
-            if (allDebts[i].debtor == user) {
-                creditors[idx] = allDebts[i].creditor;
-                amounts[idx] = formatAmount(allDebts[i].amount);
-                settledStatus[idx] = allDebts[i].settled;
-                idx++;
-            }
-        }
-    }
-
-    function getUserAllDebts(address user, uint256 groupId) public view returns (
-        address[] memory creditors,
-        uint256[] memory amounts,
-        bool[] memory settledStatus,
-        uint256[] memory timestamps
-    ) {
-        Debt[] storage allDebts = groupDebts[groupId];
-        uint256 count = 0;
-        for (uint256 i = 0; i < allDebts.length; i++) {
-            if (allDebts[i].debtor == user) {
-                count++;
-            }
-        }
-
-        creditors = new address[](count);
-        amounts = new uint256[](count);
-        settledStatus = new bool[](count);
-        timestamps = new uint256[](count);
-
-        uint256 idx;
-        for (uint256 i = 0; i < allDebts.length; i++) {
-            if (allDebts[i].debtor == user) {
-                creditors[idx] = allDebts[i].creditor;
-                amounts[idx] = allDebts[i].amount;
-                settledStatus[idx] = allDebts[i].settled;
-                timestamps[idx] = allDebts[i].timestamp;
-                idx++;
-            }
-        }
-    }
-
-    function getUserDebtHistory(address user) public view returns (
-        uint256[] memory groupIds,
-        address[] memory counterparties,
-        uint256[] memory amounts,
-        bool[] memory isCreditor,
-        bool[] memory settledStatus,
-        uint256[] memory timestamps
-    ) {
-        uint256 totalDebts = 0;
-        for (uint256 i = 1; i <= groupIdCounter; i++) {
-            totalDebts += groupDebts[i].length;
-        }
-
-        groupIds = new uint256[](totalDebts);
-        counterparties = new address[](totalDebts);
-        amounts = new uint256[](totalDebts);
-        isCreditor = new bool[](totalDebts);
-        settledStatus = new bool[](totalDebts);
-        timestamps = new uint256[](totalDebts);
-
-        uint256 idx;
-        for (uint256 i = 1; i <= groupIdCounter; i++) {
-            for (uint256 j = 0; j < groupDebts[i].length; j++) {
-                Debt storage debt = groupDebts[i][j];
-                if (debt.debtor == user || debt.creditor == user) {
-                    groupIds[idx] = i;
-                    amounts[idx] = debt.amount;
-                    settledStatus[idx] = debt.settled;
-                    timestamps[idx] = debt.timestamp;
-                    if (debt.debtor == user) {
-                        counterparties[idx] = debt.creditor;
-                        isCreditor[idx] = false;
-                    } else {
-                        counterparties[idx] = debt.debtor;
-                        isCreditor[idx] = true;
-                    }
-                    idx++;
-                }
-            }
-        }
-
-        assembly {
-            mstore(groupIds, idx)
-            mstore(counterparties, idx)
-            mstore(amounts, idx)
-            mstore(isCreditor, idx)
-            mstore(settledStatus, idx)
-            mstore(timestamps, idx)
-        }
-    }
-
-    function getAllUserBalancesFormatted(string memory username)
-        public view returns (string[] memory, uint256[] memory)
-    {
-        address userAddress = getAddressFromUsername(username);
-        uint256 groupCount = 0;
-        for (uint256 i = 1; i <= groupIdCounter; i++) {
-            if (groups[i].isMember[userAddress]) {
-                groupCount++;
-            }
-        }
-
-        string[] memory balanceStrings = new string[](groupCount);
-        uint256[] memory groupIdsArr = new uint256[](groupCount);
-        uint256 idx;
-        for (uint256 i = 1; i <= groupIdCounter; i++) {
-            if (groups[i].isMember[userAddress]) {
-                balanceStrings[idx] = getUserBalanceFormatted(username, i);
-                groupIdsArr[idx] = i;
-                idx++;
-            }
-        }
-
-        return (balanceStrings, groupIdsArr);
-    }
-
-    function getAddressFromUsername(string memory username) public view returns (address) {
-        address userAddress = usernameToAddress[username];
-        require(userAddress != address(0), "Username not registered");
-        return userAddress;
-    }
-
-    /**
-     * @notice Returns all debts for a user across all groups,
-     *         giving both raw wei amounts and formatted ether strings,
-     *         along with the group IDs and settlement status.
-     */
-    function getFormattedDebts(address user)
+    /// @notice Check if a specific debt is settled
+    function isSettled(uint256 groupId, address debtor, address creditor)
         external
         view
-        returns (
-            uint256[] memory amountsWei,
-            string[] memory amountsFormatted,
-            uint256[] memory groupIds,
-            bool[] memory settledStatus
-        )
+        returns (bool)
     {
-        // 1) Count total debts where user is debtor
-        uint256 total = 0;
-        for (uint256 g = 1; g <= groupIdCounter; g++) {
-            for (uint i = 0; i < groupDebts[g].length; i++) {
-                if (groupDebts[g][i].debtor == user) {
-                    total++;
-                }
-            }
-        }
-
-        // 2) Allocate arrays
-        amountsWei = new uint256[](total);
-        amountsFormatted = new string[](total);
-        groupIds = new uint256[](total);
-        settledStatus = new bool[](total);
-
-        // 3) Populate
-        uint256 idx = 0;
-        for (uint256 g = 1; g <= groupIdCounter; g++) {
-            for (uint i = 0; i < groupDebts[g].length; i++) {
-                Debt storage d = groupDebts[g][i];
-                if (d.debtor == user) {
-                    amountsWei[idx] = d.amount;
-                    amountsFormatted[idx] = formatAmount(d.amount);
-                    groupIds[idx] = g;
-                    settledStatus[idx] = d.settled;
-                    idx++;
-                }
-            }
-        }
+        return debtSettled[groupId][debtor][creditor];
     }
+
+        /// @notice Return the basic info for a group
+    function getGroupInfo(uint256 groupId)
+      external
+      view
+      groupExists(groupId)
+      returns (
+        uint256 id,
+        string memory name,
+        address owner,
+        bool exists
+      )
+    {
+      Group storage g = groups[groupId];
+      return (g.id, g.name, g.owner, g.exists);
+    }
+
 }

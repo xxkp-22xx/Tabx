@@ -42,31 +42,6 @@ import web3 from "./web3";
         "type": "uint256"
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "expenseId",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "ExpenseAdded",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "uint256",
-        "name": "groupId",
-        "type": "uint256"
-      },
-      {
         "indexed": true,
         "internalType": "address",
         "name": "owner",
@@ -80,6 +55,19 @@ import web3 from "./web3";
       }
     ],
     "name": "GroupCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      }
+    ],
+    "name": "GroupDeleted",
     "type": "event"
   },
   {
@@ -111,25 +99,13 @@ import web3 from "./web3";
         "type": "uint256"
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "from",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "to",
-        "type": "address"
-      },
-      {
         "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
       }
     ],
-    "name": "SettlementMade",
+    "name": "MemberRemoved",
     "type": "event"
   },
   {
@@ -154,22 +130,27 @@ import web3 from "./web3";
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      },
+      {
         "internalType": "address",
         "name": "",
         "type": "address"
       },
       {
-        "internalType": "uint256",
+        "internalType": "address",
         "name": "",
-        "type": "uint256"
+        "type": "address"
       }
     ],
-    "name": "balances",
+    "name": "debtSettled",
     "outputs": [
       {
-        "internalType": "int256",
+        "internalType": "bool",
         "name": "",
-        "type": "int256"
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -178,7 +159,7 @@ import web3 from "./web3";
   },
   {
     "inputs": [],
-    "name": "expenseIdCounter",
+    "name": "groupCount",
     "outputs": [
       {
         "internalType": "uint256",
@@ -193,36 +174,16 @@ import web3 from "./web3";
   {
     "inputs": [
       {
-        "internalType": "uint256",
+        "internalType": "address",
         "name": "",
-        "type": "uint256"
+        "type": "address"
       }
     ],
-    "name": "expenses",
+    "name": "registered",
     "outputs": [
       {
-        "internalType": "uint256",
-        "name": "id",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "totalAmount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "remainingAmount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "payer",
-        "type": "address"
-      },
-      {
         "internalType": "bool",
-        "name": "settled",
+        "name": "",
         "type": "bool"
       }
     ],
@@ -233,176 +194,17 @@ import web3 from "./web3";
   {
     "inputs": [
       {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "groupDebts",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "creditor",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "debtor",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "groupId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bool",
-        "name": "settled",
-        "type": "bool"
-      },
-      {
-        "internalType": "uint256",
-        "name": "timestamp",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function",
-    "constant": true
-  },
-  {
-    "inputs": [],
-    "name": "groupIdCounter",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function",
-    "constant": true
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "groups",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "id",
-        "type": "uint256"
-      },
-      {
-        "internalType": "string",
-        "name": "name",
-        "type": "string"
-      },
-      {
-        "internalType": "address",
-        "name": "owner",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "totalExpenses",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "memberCount",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function",
-    "constant": true
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "name": "userDebts",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "creditor",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "debtor",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "groupId",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bool",
-        "name": "settled",
-        "type": "bool"
-      },
-      {
-        "internalType": "uint256",
-        "name": "timestamp",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function",
-    "constant": true
-  },
-  {
-    "inputs": [
-      {
         "internalType": "address",
         "name": "",
         "type": "address"
       }
     ],
-    "name": "users",
+    "name": "usernameOf",
     "outputs": [
       {
         "internalType": "string",
-        "name": "username",
+        "name": "",
         "type": "string"
-      },
-      {
-        "internalType": "address",
-        "name": "userAddress",
-        "type": "address"
       }
     ],
     "stateMutability": "view",
@@ -441,14 +243,9 @@ import web3 from "./web3";
         "internalType": "uint256",
         "name": "groupId",
         "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "member",
-        "type": "address"
       }
     ],
-    "name": "addGroupMember",
+    "name": "deleteGroup",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -461,17 +258,30 @@ import web3 from "./web3";
         "type": "uint256"
       },
       {
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      }
+    ],
+    "name": "addMember",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "uint256",
-        "name": "totalAmount",
+        "name": "groupId",
         "type": "uint256"
       },
       {
-        "internalType": "string[]",
-        "name": "participantUsernames",
-        "type": "string[]"
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
       }
     ],
-    "name": "addExpense",
+    "name": "removeMember",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -489,11 +299,6 @@ import web3 from "./web3";
         "type": "string"
       },
       {
-        "internalType": "string",
-        "name": "creditorUsername",
-        "type": "string"
-      },
-      {
         "internalType": "uint256",
         "name": "paymentAmount",
         "type": "uint256"
@@ -504,26 +309,6 @@ import web3 from "./web3";
     "stateMutability": "payable",
     "type": "function",
     "payable": true
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "amountWei",
-        "type": "uint256"
-      }
-    ],
-    "name": "formatAmount",
-    "outputs": [
-      {
-        "internalType": "string",
-        "name": "",
-        "type": "string"
-      }
-    ],
-    "stateMutability": "pure",
-    "type": "function",
-    "constant": true
   },
   {
     "inputs": [
@@ -551,59 +336,24 @@ import web3 from "./web3";
         "internalType": "uint256",
         "name": "groupId",
         "type": "uint256"
-      }
-    ],
-    "name": "getGroupExpenses",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function",
-    "constant": true
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "groupId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getGroupExpenseIds",
-    "outputs": [
-      {
-        "internalType": "uint256[]",
-        "name": "",
-        "type": "uint256[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function",
-    "constant": true
-  },
-  {
-    "inputs": [
+      },
       {
         "internalType": "address",
-        "name": "user",
+        "name": "debtor",
         "type": "address"
       },
       {
-        "internalType": "uint256",
-        "name": "groupId",
-        "type": "uint256"
+        "internalType": "address",
+        "name": "creditor",
+        "type": "address"
       }
     ],
-    "name": "getUserBalance",
+    "name": "isSettled",
     "outputs": [
       {
-        "internalType": "int256",
+        "internalType": "bool",
         "name": "",
-        "type": "int256"
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -613,247 +363,32 @@ import web3 from "./web3";
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "groupId",
+        "type": "uint256"
+      }
+    ],
+    "name": "getGroupInfo",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      },
+      {
         "internalType": "string",
-        "name": "username",
+        "name": "name",
         "type": "string"
       },
       {
-        "internalType": "uint256",
-        "name": "groupId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getUserBalanceFormatted",
-    "outputs": [
-      {
-        "internalType": "string",
-        "name": "",
-        "type": "string"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function",
-    "constant": true
-  },
-  {
-    "inputs": [
-      {
         "internalType": "address",
-        "name": "user",
+        "name": "owner",
         "type": "address"
       },
       {
-        "internalType": "uint256",
-        "name": "groupId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getUserBalanceFormatted",
-    "outputs": [
-      {
-        "internalType": "string",
-        "name": "",
-        "type": "string"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function",
-    "constant": true
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "user",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "groupId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getUserDebts",
-    "outputs": [
-      {
-        "internalType": "address[]",
-        "name": "creditors",
-        "type": "address[]"
-      },
-      {
-        "internalType": "string[]",
-        "name": "amounts",
-        "type": "string[]"
-      },
-      {
-        "internalType": "bool[]",
-        "name": "settledStatus",
-        "type": "bool[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function",
-    "constant": true
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "user",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "groupId",
-        "type": "uint256"
-      }
-    ],
-    "name": "getUserAllDebts",
-    "outputs": [
-      {
-        "internalType": "address[]",
-        "name": "creditors",
-        "type": "address[]"
-      },
-      {
-        "internalType": "uint256[]",
-        "name": "amounts",
-        "type": "uint256[]"
-      },
-      {
-        "internalType": "bool[]",
-        "name": "settledStatus",
-        "type": "bool[]"
-      },
-      {
-        "internalType": "uint256[]",
-        "name": "timestamps",
-        "type": "uint256[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function",
-    "constant": true
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "user",
-        "type": "address"
-      }
-    ],
-    "name": "getUserDebtHistory",
-    "outputs": [
-      {
-        "internalType": "uint256[]",
-        "name": "groupIds",
-        "type": "uint256[]"
-      },
-      {
-        "internalType": "address[]",
-        "name": "counterparties",
-        "type": "address[]"
-      },
-      {
-        "internalType": "uint256[]",
-        "name": "amounts",
-        "type": "uint256[]"
-      },
-      {
-        "internalType": "bool[]",
-        "name": "isCreditor",
-        "type": "bool[]"
-      },
-      {
-        "internalType": "bool[]",
-        "name": "settledStatus",
-        "type": "bool[]"
-      },
-      {
-        "internalType": "uint256[]",
-        "name": "timestamps",
-        "type": "uint256[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function",
-    "constant": true
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "username",
-        "type": "string"
-      }
-    ],
-    "name": "getAllUserBalancesFormatted",
-    "outputs": [
-      {
-        "internalType": "string[]",
-        "name": "",
-        "type": "string[]"
-      },
-      {
-        "internalType": "uint256[]",
-        "name": "",
-        "type": "uint256[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function",
-    "constant": true
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "username",
-        "type": "string"
-      }
-    ],
-    "name": "getAddressFromUsername",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function",
-    "constant": true
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "user",
-        "type": "address"
-      }
-    ],
-    "name": "getFormattedDebts",
-    "outputs": [
-      {
-        "internalType": "uint256[]",
-        "name": "amountsWei",
-        "type": "uint256[]"
-      },
-      {
-        "internalType": "string[]",
-        "name": "amountsFormatted",
-        "type": "string[]"
-      },
-      {
-        "internalType": "uint256[]",
-        "name": "groupIds",
-        "type": "uint256[]"
-      },
-      {
-        "internalType": "bool[]",
-        "name": "settledStatus",
-        "type": "bool[]"
+        "internalType": "bool",
+        "name": "exists",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
@@ -862,7 +397,7 @@ import web3 from "./web3";
   }
 ]
 
-const address = "0x90B66A3d831A589660AA8F0B4B30640D3e79cd42";
+const address = "0x282a760bC76181efc653c70410BB583FdCcB48fF";
 
 const contract = new web3.eth.Contract(abi, address);
 
