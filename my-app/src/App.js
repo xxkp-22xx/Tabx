@@ -1,30 +1,51 @@
+// src/App.js
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import GroupPage from './pages/group';
-import AddExpense from './pages/addExpense';
-import GroupDebts from './pages/groupDebts';
-import NavBar from './pages/Navbar';
-import SettleDebtPage from './pages/SettlementPage';
+import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
+import GroupHomePage from './pages/GroupsHome.jsx';
+import AddExpensePage from './pages/AddExpensePage.jsx';
+import SettleDebtPage from './pages/SettleDebtPage.jsx';
 
 function App() {
   return (
-
     <BrowserRouter>
-          <NavBar />
-      <Routes>
-        <Route path="/groups" element={<GroupPage />} />
-        
-        <Route path="/groups/:groupId/add-expense" element={<AddExpense />} />
-        
-        <Route path="/" element={<Navigate to="/groups" replace />} />
+      <header style={{ padding: '1rem', background: '#f5f5f5' }}>
+        <nav style={{ display: 'flex', gap: '1rem' }}>
+          <NavLink 
+            to="/groups"
+            style={({ isActive }) => ({
+              textDecoration: isActive ? 'underline' : 'none'
+            })}
+          >
+            Groups
+          </NavLink>
+          <NavLink 
+            to="/expenses"
+            style={({ isActive }) => ({
+              textDecoration: isActive ? 'underline' : 'none'
+            })}
+          >
+            Add Expense
+          </NavLink>
+          <NavLink
+            to="/settle-debt"
+            style={({ isActive }) => ({
+              textDecoration: isActive ? 'underline' : 'none'
+            })}
+          >
+            Settle Debt
+          </NavLink>
+        </nav>
+      </header>
 
-        <Route path="*" element={<Navigate to="/groups" replace />} />
-
-        <Route path="/group-debts" element={<GroupDebts />} />
-
-        <Route path="/groups/:groupId/settle" element={<SettleDebtPage />} />
-
-      </Routes>
+      <main style={{ padding: '1rem' }}>
+        <Routes>
+          <Route path="/" element={<Navigate replace to="/groups" />} />
+          <Route path="/groups" element={<GroupHomePage />} />
+          <Route path="/expenses" element={<AddExpensePage />} />
+          <Route path="/settle-debt" element={<SettleDebtPage />} />
+          <Route path="*" element={<div>404 - Page not found</div>} />
+        </Routes>
+      </main>
     </BrowserRouter>
   );
 }
