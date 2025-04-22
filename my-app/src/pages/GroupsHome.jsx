@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import web3 from '../utils/web3';
 import contract from '../utils/contract';
 import "../styles/styles.css";
+import axios from 'axios';
 
 export default function GroupHomePage() {
   const [accounts, setAccounts] = useState([]);
@@ -22,6 +23,7 @@ export default function GroupHomePage() {
   const [error, setError] = useState('');
 
   // load accounts, groups, users
+
   useEffect(() => {
     const init = async () => {
       const accs = await web3.eth.getAccounts();
@@ -35,19 +37,18 @@ export default function GroupHomePage() {
     init();
   }, []);
 
-  // fetch groups
   const fetchGroups = async (from) => {
     try {
-      const count = await contract.methods.groupCount().call({ from });
+      const count = Number((await contract.methods.groupCount().call({ from })).toString());
       const arr = [];
       for (let i = 1; i <= count; i++) {
-        const info    = await contract.methods.getGroupInfo(i).call({ from });
+        const info = await contract.methods.getGroupInfo(i).call({ from });
         if (!info.exists) continue;
         const members = await contract.methods.getGroupMembers(i).call({ from });
         arr.push({
-          id:      Number(info.id),
-          name:    info.name,
-          owner:   info.owner,
+          id: Number(info.id.toString()),
+          name: info.name,
+          owner: info.owner,
           members,
         });
       }
@@ -80,17 +81,26 @@ export default function GroupHomePage() {
   };
 
   // register
+
   const handleRegister = async (e) => {
     e.preventDefault();
     setError(''); setMessage('');
     try {
       await contract.methods.registerUser(username)
-        .send({ from: selectedAccount });
+        .send({ from: selectedAccount, gas: 3000000 });
+
+        await axios.post('http://localhost:4000/api/users', {
+          address: selectedAccount,
+          username: username
+        });
+        console.log('User registered:', username, selectedAccount);
+
       setMessage(`Registered as ${username}`);
       setUsername('');
       await fetchRegisteredUsers(selectedAccount);
     } catch (e) {
       setError(e.message);
+      console.error("Failed to POST user to DB:", e);
     }
   };
 
@@ -99,10 +109,31 @@ export default function GroupHomePage() {
     e.preventDefault();
     setError(''); setMessage('');
     try {
-      const gas = await contract.methods.createGroup(newGroupName)
-        .estimateGas({ from: selectedAccount });
       await contract.methods.createGroup(newGroupName)
         .send({ from: selectedAccount, gas: 3000000 });
+
+      // Fetch groups to find newly created group's details
+      await fetchGroups(selectedAccount);
+
+      // After fetching, get the latest group to insert into DB
+      const latestGroupId = groups.length + 1; // since ID increments sequentially
+      // const newGroup = await contract.methods.getGroupInfo(latestGroupId).call({ from: selectedAccount });
+      const members = await contract.methods.getGroupMembers(latestGroupId).call({ from: selectedAccount });
+
+      console.log({ latestGroupId, newGroupName, selectedAccount, members });
+      try {
+        const response = await axios.post('http://localhost:4000/api/groups', {
+          groupId: latestGroupId,
+          name: newGroupName,
+          owner: selectedAccount,
+          members: members
+        });
+        console.log("Backend response:", response.data);
+      } catch (err) {
+        console.error("Frontend axios error:", err);
+      }
+      
+
       setMessage(`Group "${newGroupName}" created`);
       setNewGroupName('');
       await fetchGroups(selectedAccount);
@@ -114,10 +145,21 @@ export default function GroupHomePage() {
   // add member
   const handleAddMember = async (e) => {
     e.preventDefault();
-    setError(''); setMessage('');
+    setError('');
+    setMessage('');
     try {
+      // Call smart contract
+      console.log("Adding member:", addMemberGroupId, addMemberAddress);
       await contract.methods.addMember(addMemberGroupId, addMemberAddress)
-        .send({ from: selectedAccount });
+        .send({ from: selectedAccount, gas: 3000000 });
+  
+      // Update MongoDB
+      await axios.put(`http://localhost:4000/api/groups/${addMemberGroupId}/members`, {
+        memberAddress: addMemberAddress
+      });
+      
+      console.log("Member added to DB:", addMemberGroupId, addMemberAddress);      
+  
       setMessage(`Added ${addMemberAddress} to group ${addMemberGroupId}`);
       setAddMemberAddress('');
       await fetchGroups(selectedAccount);
@@ -125,6 +167,7 @@ export default function GroupHomePage() {
       setError(e.message);
     }
   };
+  
 
   // remove member
   const handleRemoveMember = async (e) => {
@@ -144,14 +187,13 @@ export default function GroupHomePage() {
   // helper to shorten address
   const shortAddr = addr => `${addr.slice(0,8)}…`;
 
-  // find username by address
   const findUsername = addr => {
     const u = registeredUsers.find(u => u.address === addr);
     return u ? u.username : '—';
   };
 
   return (
-    <div className="group-home-container">
+<div className="group-home-container">
       <h1>Group Management</h1>
 
       <label>
@@ -179,7 +221,7 @@ export default function GroupHomePage() {
         }
       </section>
 
-      {/* Register */}
+      {/* Register User */}
       <section className="card">
         <h2>Register User</h2>
         <form onSubmit={handleRegister}>
