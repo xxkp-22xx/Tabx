@@ -1,4 +1,3 @@
-// src/pages/AddExpensePage.jsx
 import React, { useState, useEffect } from 'react';
 import BN from 'bn.js';
 import web3 from '../utils/web3';
@@ -6,6 +5,7 @@ import contract from '../utils/contract';
 import "../styles/styles.css";
 
 export default function AddExpensePage() {
+  // core state
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState('');
   const [registeredUsers, setRegisteredUsers] = useState([]);
@@ -14,66 +14,64 @@ export default function AddExpensePage() {
   const [groupMembers, setGroupMembers] = useState([]);
 
   const [approved, setApproved] = useState(false);
-
   const [payer, setPayer] = useState('');
   const [participants, setParticipants] = useState([]);
   const [logic, setLogic] = useState('Equal');
   const [amountEth, setAmountEth] = useState('');
   const [customShares, setCustomShares] = useState({});
 
+  // debts persist per account
   const [debts, setDebts] = useState([]);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
-  // Helpers
-  const shortAddr   = addr => addr.slice(0,8)+'…';
-  const findUsername = addr => {
-    const u = registeredUsers.find(u=>u.address===addr);
-    return u ? u.username : addr;
+  // utility
+  const storageKey = selectedAccount ? `debts:${selectedAccount}` : null;
+  const shortAddr   = a => a.slice(0,8) + '…';
+  const findUsername = a => {
+    const u = registeredUsers.find(u => u.address === a);
+    return u ? u.username : a;
   };
   const formatEthWei = rawWei => {
     const wei = rawWei.split('.')[0];
-    const fullEth = web3.utils.fromWei(wei,'ether');
-    const [whole, frac=''] = fullEth.split('.');
-    const twoDec = (frac+'00').slice(0,2);
-    return `${whole}.${twoDec} ETH / ${wei} WEI`;
+    const fullEth = web3.utils.fromWei(wei, 'ether');
+    const [w,f=''] = fullEth.split('.');
+    return `${w}.${(f+'00').slice(0,2)} ETH / ${wei} WEI`;
   };
 
-  // Hydrate debts from localStorage
+  // 1) load accounts once
   useEffect(() => {
-    const saved = localStorage.getItem('debts');
-    if (saved) {
-      try {
-        setDebts(JSON.parse(saved));
-      } catch {}
-    }
-  }, []);
-
-  // Whenever debts change, write to localStorage
-  useEffect(() => {
-    localStorage.setItem('debts', JSON.stringify(debts));
-  }, [debts]);
-
-  // Fetch accounts, users, groups
-  useEffect(() => {
-    (async () => {
-      const accs = await web3.eth.getAccounts();
+    web3.eth.getAccounts().then(accs => {
       setAccounts(accs);
       if (accs[0]) setSelectedAccount(accs[0]);
-    })();
+    });
   }, []);
 
+  // 2) hydrate debts and on‑chain data whenever account changes
   useEffect(() => {
     if (!selectedAccount) return;
+    // hydrate debts
+    try {
+      const saved = localStorage.getItem(storageKey);
+      setDebts(saved ? JSON.parse(saved) : []);
+    } catch {
+      setDebts([]);
+    }
+    // on‑chain fetches
     fetchRegisteredUsers();
     fetchGroups();
   }, [selectedAccount]);
 
+  // 3) persist debts when they change
+  useEffect(() => {
+    if (!storageKey) return;
+    localStorage.setItem(storageKey, JSON.stringify(debts));
+  }, [debts, storageKey]);
+
   // fetch registered users
   const fetchRegisteredUsers = async () => {
-    const accs = await web3.eth.getAccounts();
     const regs = [];
-    for (const addr of accs) {
+    for (const addr of accounts) {
       if (await contract.methods.registered(addr).call({ from: selectedAccount })) {
         const name = await contract.methods.usernameOf(addr).call({ from: selectedAccount });
         regs.push({ address: addr, username: name });
@@ -84,9 +82,9 @@ export default function AddExpensePage() {
 
   // fetch groups
   const fetchGroups = async () => {
-    const count = Number(await contract.methods.groupCount().call({ from: selectedAccount }));
+    const cnt = Number(await contract.methods.groupCount().call({ from: selectedAccount }));
     const arr = [];
-    for (let i = 1; i <= count; i++) {
+    for (let i = 1; i <= cnt; i++) {
       const info = await contract.methods.getGroupInfo(i).call({ from: selectedAccount });
       if (!info.exists) continue;
       arr.push({ id: i, name: info.name });
@@ -94,50 +92,43 @@ export default function AddExpensePage() {
     setGroups(arr);
   };
 
-  // fetch members when group changes
+  // load members when group changes
   useEffect(() => {
     if (!selectedGroup) return;
-    (async () => {
-      const mems = await contract.methods
-        .getGroupMembers(selectedGroup)
-        .call({ from: selectedAccount });
-      setGroupMembers(mems);
-      setParticipants([]);
-      setPayer('');
-      setCustomShares({});
-    })();
-  }, [selectedGroup]);
+    contract.methods.getGroupMembers(selectedGroup)
+      .call({ from: selectedAccount })
+      .then(mems => {
+        setGroupMembers(mems);
+        setParticipants([]); setPayer(''); setCustomShares({});
+      });
+  }, [selectedGroup, selectedAccount]);
 
-  // wallet approval
+  // approve stub
   const handleApprove = async () => {
     try {
-      await web3.eth.sendTransaction({
-        from: selectedAccount,
-        to: selectedAccount,
-        value: '0'
-      });
-      setApproved(true);
-      setMsg('Wallet approved');
+      await web3.eth.sendTransaction({ from: selectedAccount, to: selectedAccount, value: '0' });
+      setApproved(true); setMsg('Wallet approved');
     } catch {
       setErr('Approval failed');
     }
   };
 
   const toggleParticipant = addr =>
-    setParticipants(ps =>
-      ps.includes(addr) ? ps.filter(a=>a!==addr) : [...ps, addr]
+    setParticipants(ps => ps.includes(addr)
+      ? ps.filter(a=>a!==addr)
+      : [...ps, addr]
     );
 
-  const handleCustomChange = (addr, val) =>
+  const handleCustomChange = (addr,val) =>
     setCustomShares(cs => ({ ...cs, [addr]: val }));
 
   // add expense
   const handleAddExpense = e => {
     e.preventDefault();
     setErr(''); setMsg('');
-    if (!approved)            return setErr('Approve wallet first');
-    if (!selectedGroup)       return setErr('Select a group');
-    if (!payer)               return setErr('Select a payer');
+    if (!approved)            return setErr('Approve wallet');
+    if (!selectedGroup)       return setErr('Select group');
+    if (!payer)               return setErr('Select payer');
     if (participants.length===0) return setErr('Select participants');
     if (!amountEth)           return setErr('Enter amount');
 
@@ -145,35 +136,35 @@ export default function AddExpensePage() {
     let shares = [];
 
     if (logic==='Equal') {
-      const cnt = new BN(participants.length.toString());
+      const cnt  = new BN(participants.length.toString());
       const each = rawWeiBN.div(cnt);
-      let dist = new BN('0');
+      let acc = new BN('0');
       participants.forEach((_,i)=>{
-        let share = each;
-        if (i===participants.length-1) share = rawWeiBN.sub(dist);
-        else dist = dist.add(each);
-        shares.push(share);
+        let s = each;
+        if (i===participants.length-1) s = rawWeiBN.sub(acc);
+        else acc = acc.add(each);
+        shares.push(s);
       });
     } else {
-      let dist = new BN('0');
+      let acc = new BN('0');
       participants.forEach(addr=>{
         const bn = new BN(web3.utils.toWei((customShares[addr]||'0'),'ether'));
-        dist = dist.add(bn);
+        acc = acc.add(bn);
         shares.push(bn);
       });
-      if (!dist.eq(rawWeiBN)) {
-        const last = rawWeiBN.sub(dist);
-        shares[shares.length-1] = shares[shares.length-1].add(last);
+      if (!acc.eq(rawWeiBN)) {
+        const rem = rawWeiBN.sub(acc);
+        shares[shares.length-1] = shares[shares.length-1].add(rem);
       }
     }
 
     const newEntries = participants
       .filter(d=>d!==payer)
-      .map((deb,idx)=>({
+      .map((deb,i)=>({
         groupId:   selectedGroup,
         debtor:    deb,
         creditor:  payer,
-        amountWei: shares[idx].toString()
+        amountWei: shares[i].toString()
       }));
 
     setDebts(d=>[...d, ...newEntries]);
@@ -181,13 +172,10 @@ export default function AddExpensePage() {
     setAmountEth(''); setLogic('Equal'); setCustomShares({});
   };
 
-  // compute per-person totals
+  // compute totals
   const totals = {};
-  debts
-    .filter(d=>d.groupId===selectedGroup)
-    .forEach(d=>{
-      totals[d.debtor] = (totals[d.debtor]||new BN('0')).add(new BN(d.amountWei));
-    });
+  debts.filter(d=>d.groupId===selectedGroup)
+    .forEach(d=>{ totals[d.debtor] = (totals[d.debtor]||new BN('0')).add(new BN(d.amountWei)); });
 
   return (
     <div className="expense-container">
@@ -201,9 +189,7 @@ export default function AddExpensePage() {
             onChange={e=>{ setSelectedAccount(e.target.value); setApproved(false); }}
           >
             {accounts.map(a=>
-              <option key={a} value={a}>
-                {shortAddr(a)} {findUsername(a)}
-              </option>
+              <option key={a} value={a}>{shortAddr(a)} {findUsername(a)}</option>
             )}
           </select>
         </label>
