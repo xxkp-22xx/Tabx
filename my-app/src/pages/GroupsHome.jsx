@@ -102,7 +102,7 @@ export default function GroupHomePage() {
       const gas = await contract.methods.createGroup(newGroupName)
         .estimateGas({ from: selectedAccount });
       await contract.methods.createGroup(newGroupName)
-        .send({ from: selectedAccount, gas: gas + 10000 });
+        .send({ from: selectedAccount, gas: 3000000 });
       setMessage(`Group "${newGroupName}" created`);
       setNewGroupName('');
       await fetchGroups(selectedAccount);

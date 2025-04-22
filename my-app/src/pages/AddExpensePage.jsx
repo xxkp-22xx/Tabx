@@ -1,11 +1,9 @@
+// src/pages/AddExpensePage.jsx
 import React, { useState, useEffect } from 'react';
 import BN from 'bn.js';
 import web3 from '../utils/web3';
 import contract from '../utils/contract';
 import "../styles/styles.css";
-import api from '../utils/api';
-
-const STORAGE_KEY = 'debts';
 
 export default function AddExpensePage() {
   const [accounts, setAccounts] = useState([]);
@@ -16,6 +14,7 @@ export default function AddExpensePage() {
   const [groupMembers, setGroupMembers] = useState([]);
 
   const [approved, setApproved] = useState(false);
+
   const [payer, setPayer] = useState('');
   const [participants, setParticipants] = useState([]);
   const [logic, setLogic] = useState('Equal');
@@ -26,24 +25,43 @@ export default function AddExpensePage() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
+  // Helpers
+  const shortAddr   = addr => addr.slice(0,8)+'…';
+  const findUsername = addr => {
+    const u = registeredUsers.find(u=>u.address===addr);
+    return u ? u.username : addr;
+  };
+  const formatEthWei = rawWei => {
+    const wei = rawWei.split('.')[0];
+    const fullEth = web3.utils.fromWei(wei,'ether');
+    const [whole, frac=''] = fullEth.split('.');
+    const twoDec = (frac+'00').slice(0,2);
+    return `${whole}.${twoDec} ETH / ${wei} WEI`;
+  };
+
+  // Hydrate debts from localStorage
   useEffect(() => {
-    // hydrate once on mount
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      setDebts(saved ? JSON.parse(saved) : []);
-    } catch {
-      setDebts([]);
+    const saved = localStorage.getItem('debts');
+    if (saved) {
+      try {
+        setDebts(JSON.parse(saved));
+      } catch {}
     }
-    web3.eth.getAccounts().then(accs => {
-      setAccounts(accs);
-      if (accs[0]) setSelectedAccount(accs[0]);
-    });
   }, []);
 
+  // Whenever debts change, write to localStorage
   useEffect(() => {
-    // persist whenever debts change
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(debts));
+    localStorage.setItem('debts', JSON.stringify(debts));
   }, [debts]);
+
+  // Fetch accounts, users, groups
+  useEffect(() => {
+    (async () => {
+      const accs = await web3.eth.getAccounts();
+      setAccounts(accs);
+      if (accs[0]) setSelectedAccount(accs[0]);
+    })();
+  }, []);
 
   useEffect(() => {
     if (!selectedAccount) return;
@@ -51,9 +69,11 @@ export default function AddExpensePage() {
     fetchGroups();
   }, [selectedAccount]);
 
+  // fetch registered users
   const fetchRegisteredUsers = async () => {
+    const accs = await web3.eth.getAccounts();
     const regs = [];
-    for (const addr of accounts) {
+    for (const addr of accs) {
       if (await contract.methods.registered(addr).call({ from: selectedAccount })) {
         const name = await contract.methods.usernameOf(addr).call({ from: selectedAccount });
         regs.push({ address: addr, username: name });
@@ -62,10 +82,11 @@ export default function AddExpensePage() {
     setRegisteredUsers(regs);
   };
 
+  // fetch groups
   const fetchGroups = async () => {
-    const cnt = Number(await contract.methods.groupCount().call({ from: selectedAccount }));
+    const count = Number(await contract.methods.groupCount().call({ from: selectedAccount }));
     const arr = [];
-    for (let i = 1; i <= cnt; i++) {
+    for (let i = 1; i <= count; i++) {
       const info = await contract.methods.getGroupInfo(i).call({ from: selectedAccount });
       if (!info.exists) continue;
       arr.push({ id: i, name: info.name });
@@ -73,34 +94,28 @@ export default function AddExpensePage() {
     setGroups(arr);
   };
 
+  // fetch members when group changes
   useEffect(() => {
     if (!selectedGroup) return;
-    contract.methods.getGroupMembers(selectedGroup)
-      .call({ from: selectedAccount })
-      .then(mems => {
-        setGroupMembers(mems);
-        setParticipants([]);
-        setPayer('');
-        setCustomShares({});
-      })
-      .catch(console.error);
-  }, [selectedGroup, selectedAccount]);
+    (async () => {
+      const mems = await contract.methods
+        .getGroupMembers(selectedGroup)
+        .call({ from: selectedAccount });
+      setGroupMembers(mems);
+      setParticipants([]);
+      setPayer('');
+      setCustomShares({});
+    })();
+  }, [selectedGroup]);
 
-  const shortAddr    = a => a.slice(0,8) + '…';
-  const findUsername = a => {
-    const u = registeredUsers.find(u=>u.address===a);
-    return u ? u.username : a;
-  };
-  const formatEthWei = rawWei => {
-    const wei = rawWei.split('.')[0];
-    const fullEth = web3.utils.fromWei(wei,'ether');
-    const [w,f=''] = fullEth.split('.');
-    return `${w}.${(f+'00').slice(0,2)} ETH / ${wei} WEI`;
-  };
-
+  // wallet approval
   const handleApprove = async () => {
     try {
-      await web3.eth.sendTransaction({ from: selectedAccount, to: selectedAccount, value: '0' });
+      await web3.eth.sendTransaction({
+        from: selectedAccount,
+        to: selectedAccount,
+        value: '0'
+      });
       setApproved(true);
       setMsg('Wallet approved');
     } catch {
@@ -109,66 +124,70 @@ export default function AddExpensePage() {
   };
 
   const toggleParticipant = addr =>
-    setParticipants(ps => ps.includes(addr) ? ps.filter(a=>a!==addr) : [...ps, addr]);
+    setParticipants(ps =>
+      ps.includes(addr) ? ps.filter(a=>a!==addr) : [...ps, addr]
+    );
 
-  const handleCustomChange = (addr,val) =>
+  const handleCustomChange = (addr, val) =>
     setCustomShares(cs => ({ ...cs, [addr]: val }));
 
+  // add expense
   const handleAddExpense = e => {
     e.preventDefault();
-    setErr('');
-    setMsg('');
-    if (!approved)              return setErr('Approve wallet first');
-    if (!selectedGroup)         return setErr('Select a group');
-    if (!payer)                 return setErr('Select a payer');
+    setErr(''); setMsg('');
+    if (!approved)            return setErr('Approve wallet first');
+    if (!selectedGroup)       return setErr('Select a group');
+    if (!payer)               return setErr('Select a payer');
     if (participants.length===0) return setErr('Select participants');
-    if (!amountEth)             return setErr('Enter amount');
+    if (!amountEth)           return setErr('Enter amount');
 
-    const rawWeiBN = new BN(web3.utils.toWei(amountEth,'ether'));
+    const rawWeiBN = new BN(web3.utils.toWei(amountEth.toString(),'ether'));
     let shares = [];
 
     if (logic==='Equal') {
-      const cnt  = new BN(participants.length.toString());
+      const cnt = new BN(participants.length.toString());
       const each = rawWeiBN.div(cnt);
-      let acc = new BN('0');
+      let dist = new BN('0');
       participants.forEach((_,i)=>{
-        let s = each;
-        if (i===participants.length-1) s = rawWeiBN.sub(acc);
-        else acc = acc.add(each);
-        shares.push(s);
+        let share = each;
+        if (i===participants.length-1) share = rawWeiBN.sub(dist);
+        else dist = dist.add(each);
+        shares.push(share);
       });
     } else {
-      let acc = new BN('0');
+      let dist = new BN('0');
       participants.forEach(addr=>{
         const bn = new BN(web3.utils.toWei((customShares[addr]||'0'),'ether'));
-        acc = acc.add(bn);
+        dist = dist.add(bn);
         shares.push(bn);
       });
-      if (!acc.eq(rawWeiBN)) {
-        const rem = rawWeiBN.sub(acc);
-        shares[shares.length-1] = shares[shares.length-1].add(rem);
+      if (!dist.eq(rawWeiBN)) {
+        const last = rawWeiBN.sub(dist);
+        shares[shares.length-1] = shares[shares.length-1].add(last);
       }
     }
 
     const newEntries = participants
       .filter(d=>d!==payer)
-      .map((deb,i)=>({
+      .map((deb,idx)=>({
         groupId:   selectedGroup,
         debtor:    deb,
         creditor:  payer,
-        amountWei: shares[i].toString()
+        amountWei: shares[idx].toString()
       }));
 
-    setDebts(d => [...d, ...newEntries]);
+    setDebts(d=>[...d, ...newEntries]);
     setMsg('Expense added');
-    setAmountEth('');
-    setLogic('Equal');
-    setCustomShares({});
+    setAmountEth(''); setLogic('Equal'); setCustomShares({});
   };
 
-  // build totals only for those who owe
-  const groupDebts    = debts.filter(d=>d.groupId===selectedGroup);
-  const uniqueDebtors = Array.from(new Set(groupDebts.map(d=>d.debtor)));
+  // compute per-person totals
+  const totals = {};
+  debts
+    .filter(d=>d.groupId===selectedGroup)
+    .forEach(d=>{
+      totals[d.debtor] = (totals[d.debtor]||new BN('0')).add(new BN(d.amountWei));
+    });
 
   return (
     <div className="expense-container">
@@ -181,11 +200,11 @@ export default function AddExpensePage() {
             value={selectedAccount}
             onChange={e=>{ setSelectedAccount(e.target.value); setApproved(false); }}
           >
-            {accounts.map(a=>(
+            {accounts.map(a=>
               <option key={a} value={a}>
                 {shortAddr(a)} {findUsername(a)}
               </option>
-            ))}
+            )}
           </select>
         </label>
         <button onClick={handleApprove} disabled={approved}>
@@ -199,45 +218,45 @@ export default function AddExpensePage() {
       <form onSubmit={handleAddExpense}>
         {/* Group */}
         <div>
-          <label>
-            Group:
+          <label>Group:
             <select
               value={selectedGroup}
               onChange={e=>setSelectedGroup(e.target.value)}
               required
             >
-              <option value="">--Select--</option>
-              {groups.map(g=>(
+              <option value="">Select</option>
+              {groups.map(g=>
                 <option key={g.id} value={g.id}>
                   {g.id}: {g.name}
                 </option>
-              ))}
+              )}
             </select>
           </label>
         </div>
+
         {/* Payer */}
         <div>
-          <label>
-            Payer:
+          <label>Payer:
             <select
               value={payer}
               onChange={e=>setPayer(e.target.value)}
               required
             >
-              <option value="">--Select--</option>
-              {groupMembers.map(m=>(
+              <option value="">Select</option>
+              {groupMembers.map(m=>
                 <option key={m} value={m}>
                   {findUsername(m)}
                 </option>
-              ))}
+              )}
             </select>
           </label>
         </div>
+
         {/* Participants */}
         <div>
           <p>Participants:</p>
           {groupMembers.map(m=>(
-            <label key={m} style={{marginRight:'1rem'}}>
+            <label key={m} style={{ marginRight:'1rem' }}>
               <input
                 type="checkbox"
                 checked={participants.includes(m)}
@@ -247,10 +266,10 @@ export default function AddExpensePage() {
             </label>
           ))}
         </div>
-        {/* Splitting Logic */}
+
+        {/* Logic */}
         <div>
-          <label>
-            Splitting Logic:
+          <label>Splitting Logic:
             <select
               value={logic}
               onChange={e=>setLogic(e.target.value)}
@@ -260,7 +279,8 @@ export default function AddExpensePage() {
             </select>
           </label>
         </div>
-        {/* Custom Shares */}
+
+        {/* Custom shares */}
         {logic==='Custom' && (
           <div className="full-width">
             <p>Custom shares (ETH):</p>
@@ -269,8 +289,7 @@ export default function AddExpensePage() {
                 <label>
                   {findUsername(m)}:
                   <input
-                    type="number"
-                    step="0.01"
+                    type="number" step="0.01"
                     value={customShares[m]||''}
                     onChange={e=>handleCustomChange(m,e.target.value)}
                     required
@@ -280,62 +299,63 @@ export default function AddExpensePage() {
             ))}
           </div>
         )}
+
         {/* Amount */}
         <div>
-          <label>
-            Amount (ETH):
+          <label>Amount (ETH):
             <input
-              type="number"
-              step="0.01"
+              type="number" step="0.01"
               value={amountEth}
               onChange={e=>setAmountEth(e.target.value)}
               required
             />
           </label>
         </div>
+
         <button type="submit" disabled={!approved}>
           Add Expense
         </button>
       </form>
 
-      {/* Totals Table */}
-      {selectedGroup && uniqueDebtors.length > 0 && (
+      {/* Totals table */}
+      {selectedGroup && (
         <section>
           <h2>Total Owed in Group {selectedGroup}</h2>
           <table>
             <thead>
-              <tr><th>Member</th><th>Total Owed</th></tr>
+              <tr>
+                <th>Member</th>
+                <th>Total Owed</th>
+              </tr>
             </thead>
             <tbody>
-              {uniqueDebtors.map(deb => {
-                const totalWei = groupDebts
-                  .filter(d=>d.debtor===deb)
-                  .reduce((acc,d)=>acc.add(new BN(d.amountWei)), new BN('0'))
-                  .toString();
-                return (
-                  <tr key={deb}>
-                    <td>{findUsername(deb)}</td>
-                    <td>{formatEthWei(totalWei)}</td>
-                  </tr>
-                );
-              })}
+              {groupMembers.map(m=>(
+                <tr key={m}>
+                  <td>{findUsername(m)}</td>
+                  <td>{formatEthWei((totals[m]||new BN('0')).toString())}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </section>
       )}
 
-      {/* Detailed Debts */}
+      {/* Detailed debts */}
       <section>
         <h2>Detailed Debts</h2>
-        {groupDebts.length === 0 ? (
-          <p>No debts in this group yet.</p>
+        {debts.filter(d=>d.groupId===selectedGroup).length===0 ? (
+          <p>No debts yet.</p>
         ) : (
           <table>
             <thead>
-              <tr><th>Debtor</th><th>Creditor</th><th>Amount</th></tr>
+              <tr>
+                <th>Debtor</th>
+                <th>Creditor</th>
+                <th>Amount</th>
+              </tr>
             </thead>
             <tbody>
-              {groupDebts.map((d,i)=>(
+              {debts.filter(d=>d.groupId===selectedGroup).map((d,i)=>(
                 <tr key={i}>
                   <td>{findUsername(d.debtor)}</td>
                   <td>{findUsername(d.creditor)}</td>
