@@ -1,4 +1,3 @@
-// src/pages/SettleDebtPage.jsx
 import React, { useState, useEffect } from 'react';
 import BN from 'bn.js';
 import web3 from '../utils/web3';
@@ -11,17 +10,14 @@ export default function SettleDebtPage() {
   const [registeredUsers, setRegisteredUsers] = useState([]);
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
-
   const [debts, setDebts] = useState([]);
-  const [selectedDebtor, setSelectedDebtor] = useState('');
   const [creditorSelections, setCreditorSelections] = useState({});
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [settling, setSettling] = useState(false);
 
   const storageKey = selectedAccount ? `debts:${selectedAccount}` : null;
-
-  const shortAddr    = a => a.slice(0,8) + '…';
+  const shortAddr = a => a.slice(0,8) + '…';
   const findUsername = a => {
     const u = registeredUsers.find(u => u.address === a);
     return u ? u.username : a;
@@ -30,10 +26,10 @@ export default function SettleDebtPage() {
     const wei = rawWei.split('.')[0];
     const fullEth = web3.utils.fromWei(wei, 'ether');
     const [w,f=''] = fullEth.split('.');
-    return `${w}.${(f+'00').slice(0,2)} ETH / ${wei} WEI`;
+    return `${w}.${(f+'00').slice(0,2)} ETH / ${wei} WEI`;
   };
 
-  // 1) Load accounts
+  // load accounts
   useEffect(() => {
     web3.eth.getAccounts().then(accs => {
       setAccounts(accs);
@@ -41,28 +37,92 @@ export default function SettleDebtPage() {
     });
   }, []);
 
-  // 2) On account change: hydrate debts + fetch on‑chain data
+  // hydrate debts and fetch chain data when account changes
   useEffect(() => {
     if (!selectedAccount) return;
-    // hydrate
     try {
       const saved = localStorage.getItem(storageKey);
       setDebts(saved ? JSON.parse(saved) : []);
     } catch {
       setDebts([]);
     }
-    // fetch users & groups
     fetchRegisteredUsers();
     fetchGroups();
+    setSelectedGroup('');
+    setCreditorSelections({});
+    setMsg(''); setErr('');
   }, [selectedAccount]);
 
-  // 3) Persist debts
+  // build selections for this debtor in the group
   useEffect(() => {
-    if (!storageKey) return;
-    localStorage.setItem(storageKey, JSON.stringify(debts));
-  }, [debts, storageKey]);
+    if (!selectedGroup) {
+      setCreditorSelections({});
+      return;
+    }
+    // all debts for this account in the group
+    const myDebts = debts.filter(d => d.groupId === selectedGroup && d.debtor === selectedAccount);
+    const sel = {};
+    myDebts.forEach(d => {
+      sel[d.creditor] = { checked: false, paymentWei: d.amountWei };
+    });
+    setCreditorSelections(sel);
+  }, [selectedGroup, debts, selectedAccount]);
 
-  // fetch registered users
+  const toggleCreditor = cred => {
+    setCreditorSelections(cs => ({
+      ...cs,
+      [cred]: { ...cs[cred], checked: !cs[cred].checked }
+    }));
+  };
+
+  const changePayment = (cred, valEth) => {
+    const wei = web3.utils.toWei(valEth || '0', 'ether');
+    setCreditorSelections(cs => ({
+      ...cs,
+      [cred]: { ...cs[cred], paymentWei: wei }
+    }));
+  };
+
+  const handleSettle = async () => {
+    setErr(''); setMsg(''); setSettling(true);
+    try {
+      const debtorUsername = findUsername(selectedAccount);
+      let updated = [...debts];
+
+      for (const [cred, { checked, paymentWei }] of Object.entries(creditorSelections)) {
+        if (!checked) continue;
+        await contract.methods
+          .settleDebtByName(
+            Number(selectedGroup),
+            debtorUsername,
+            paymentWei
+          )
+          .send({ from: selectedAccount, value: paymentWei, gas: 300000 });
+
+        // update local debts array
+        updated = updated.map(d => {
+          if (d.groupId === selectedGroup && d.debtor === selectedAccount && d.creditor === cred) {
+            const owed = new BN(d.amountWei);
+            const pay  = new BN(paymentWei);
+            const rem  = owed.sub(pay);
+            return { ...d, amountWei: rem.gte(new BN(0)) ? rem.toString() : '0' };
+          }
+          return d;
+        });
+      }
+
+      // persist updated debts
+      setDebts(updated);
+      if (storageKey) localStorage.setItem(storageKey, JSON.stringify(updated));
+
+      setMsg('Settlement successful');
+    } catch (e) {
+      console.error(e);
+      setErr('Settlement failed: ' + (e.message || e));
+    }
+    setSettling(false);
+  };
+
   const fetchRegisteredUsers = async () => {
     const regs = [];
     for (const addr of accounts) {
@@ -74,7 +134,6 @@ export default function SettleDebtPage() {
     setRegisteredUsers(regs);
   };
 
-  // fetch groups
   const fetchGroups = async () => {
     const cnt = Number(await contract.methods.groupCount().call({ from: selectedAccount }));
     const arr = [];
@@ -86,148 +145,42 @@ export default function SettleDebtPage() {
     setGroups(arr);
   };
 
-  // debts in this group
-  const groupDebts = debts.filter(d => d.groupId === selectedGroup);
-
-  // unique debtors
-  const uniqueDebtors = Array.from(new Set(groupDebts.map(d => d.debtor)));
-
-  // compute totals per debtor
-  const totals = {};
-  groupDebts.forEach(d => {
-    totals[d.debtor] = (totals[d.debtor] || new BN('0')).add(new BN(d.amountWei));
-  });
-
-  // when group changes, reset UI
-  useEffect(() => {
-    setSelectedDebtor('');
-    setCreditorSelections({});
-  }, [selectedGroup]);
-
-  // when debtor changes, build creditorSelections
-  useEffect(() => {
-    if (!selectedDebtor) {
-      setCreditorSelections({});
-      return;
-    }
-    const sel = {};
-    groupDebts
-      .filter(d => d.debtor === selectedDebtor)
-      .forEach(d => {
-        sel[d.creditor] = { checked: false, paymentWei: d.amountWei };
-      });
-    setCreditorSelections(sel);
-  }, [selectedDebtor, selectedGroup, debts]);
-
-  // toggle creditor
-  const toggleCreditor = addr => {
-    setCreditorSelections(cs => ({
-      ...cs,
-      [addr]: { ...cs[addr], checked: !cs[addr].checked }
-    }));
-  };
-
-  // change payment
-  const changePayment = (addr, valEth) => {
-    const wei = web3.utils.toWei(valEth || '0', 'ether');
-    setCreditorSelections(cs => ({
-      ...cs,
-      [addr]: { ...cs[addr], paymentWei: wei }
-    }));
-  };
-
-  // settle handler
-  const handleSettle = async () => {
-    setErr(''); setMsg('');
-    setSettling(true);
-    try {
-      for (const [cred, { checked, paymentWei }] of Object.entries(creditorSelections)) {
-        if (!checked) continue;
-        await contract.methods
-          .settleDebtByName(
-            selectedGroup,
-            findUsername(selectedDebtor),
-            paymentWei
-          )
-          .send({
-            from: selectedAccount,
-            value: paymentWei,
-            gas: 300000
-          });
-
-        // update local debts
-        setDebts(ds => ds.map(d => {
-          if (
-            d.groupId === selectedGroup &&
-            d.debtor  === selectedDebtor &&
-            d.creditor=== cred
-          ) {
-            const owed = new BN(d.amountWei);
-            const pay  = new BN(paymentWei);
-            const rem  = owed.sub(pay);
-            return { ...d, amountWei: rem.lt(new BN('0')) ? '0' : rem.toString() };
-          }
-          return d;
-        }));
-      }
-      setMsg('Settlement(s) successful');
-    } catch {
-      setErr('Settlement failed');
-    }
-    setSettling(false);
-  };
+  // filtered views
+  const groupAllDebts = debts.filter(d => d.groupId === selectedGroup);
+  const myGroupDebts  = groupAllDebts.filter(d => d.debtor === selectedAccount);
+  const totalOwed     = myGroupDebts.reduce((sum, d) => sum.add(new BN(d.amountWei)), new BN(0));
 
   return (
     <div className="settle-page">
       <h1>Settle Debts</h1>
 
+      {/* Account & Group Selectors */}
       <div className="controls">
-        <label>
-          Account:
-          <select
-            value={selectedAccount}
-            onChange={e => setSelectedAccount(e.target.value)}
-          >
-            {accounts.map(a=>(
-              <option key={a} value={a}>{shortAddr(a)} {findUsername(a)}</option>
-            ))}
+        <label>Account:
+          <select value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)}>
+            {accounts.map(a => <option key={a} value={a}>{shortAddr(a)} {findUsername(a)}</option>)}
+          </select>
+        </label>
+        <label>Group:
+          <select value={selectedGroup} onChange={e => setSelectedGroup(e.target.value)}>
+            <option value="">Select</option>
+            {groups.map(g => <option key={g.id} value={g.id}>{g.id}: {g.name}</option>)}
           </select>
         </label>
       </div>
 
-      <div>
-        <label>
-          Group:
-          <select
-            value={selectedGroup}
-            onChange={e => setSelectedGroup(e.target.value)}
-          >
-            <option value="">Select group</option>
-            {groups.map(g=>(
-              <option key={g.id} value={g.id}>
-                {g.id}: {g.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      {/* TOTALS TABLE */}
-      {selectedGroup && groupDebts.length > 0 && (
+      {/* Group-specific debts table */}
+      {selectedGroup && groupAllDebts.length > 0 && (
         <section>
-          <h2>Total Owed in Group {selectedGroup}</h2>
+          <h2>All Debts in Group {selectedGroup}</h2>
           <table>
-            <thead>
-              <tr>
-                <th>Debtor</th>
-                <th>Total Owed</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Debtor</th><th>Creditor</th><th>Amount</th></tr></thead>
             <tbody>
-              {uniqueDebtors.map(deb => (
-                <tr key={deb}>
-                  <td>{findUsername(deb)}</td>
-                  <td>{formatEthWei(totals[deb].toString())}</td>
+              {groupAllDebts.map((d,i) => (
+                <tr key={i}>
+                  <td>{findUsername(d.debtor)}</td>
+                  <td>{findUsername(d.creditor)}</td>
+                  <td>{formatEthWei(d.amountWei)}</td>
                 </tr>
               ))}
             </tbody>
@@ -235,73 +188,25 @@ export default function SettleDebtPage() {
         </section>
       )}
 
-      {/* DEBTOR SELECTION */}
-      {uniqueDebtors.length > 0 && (
-        <div>
-          <label>
-            Debtor:
-            <select
-              value={selectedDebtor}
-              onChange={e => setSelectedDebtor(e.target.value)}
-            >
-              <option value="">Select debtor</option>
-              {uniqueDebtors.map(d=>(
-                <option key={d} value={d}>{findUsername(d)}</option>
-              ))}
-            </select>
-          </label>
-        </div>
-      )}
-
-      {/* CREDITOR LIST */}
-      {selectedDebtor && (
-        <div className="creditor-list">
-          <h2>Creditors for {findUsername(selectedDebtor)}</h2>
+      {/* Settlement UI for current account */}
+      {selectedGroup && myGroupDebts.length > 0 && (
+        <section className="creditor-list">
+          <h2>Your Debts: Total {formatEthWei(totalOwed.toString())}</h2>
           <table>
-            <thead>
-              <tr>
-                <th></th><th>Creditor</th><th>Owed</th><th>Pay (ETH)</th>
-              </tr>
-            </thead>
+            <thead><tr><th></th><th>Creditor</th><th>Owed</th><th>Pay</th></tr></thead>
             <tbody>
-              {Object.entries(creditorSelections).map(
-                ([cred, { checked, paymentWei }]) => (
+              {Object.entries(creditorSelections).map(([cred, { checked, paymentWei }]) => (
                 <tr key={cred}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={()=>toggleCreditor(cred)}
-                    />
-                  </td>
+                  <td><input type="checkbox" checked={checked} onChange={() => toggleCreditor(cred)} /></td>
                   <td>{findUsername(cred)}</td>
-                  <td>{
-                    formatEthWei(
-                      groupDebts.find(
-                        d=>d.debtor===selectedDebtor && d.creditor===cred
-                      ).amountWei
-                    )
-                  }</td>
-                  <td>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={web3.utils.fromWei(paymentWei,'ether')}
-                      onChange={e=>changePayment(cred,e.target.value)}
-                      disabled={!checked}
-                    />
-                  </td>
+                  <td>{formatEthWei(myGroupDebts.find(d => d.creditor===cred).amountWei)}</td>
+                  <td><input type="number" step="0.01" disabled={!checked} value={web3.utils.fromWei(paymentWei,'ether')} onChange={e => changePayment(cred,e.target.value)} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <button
-            onClick={handleSettle}
-            disabled={settling}
-          >
-            {settling ? 'Processing…' : 'Settle Selected'}
-          </button>
-        </div>
+          <button onClick={handleSettle} disabled={settling}>{settling ? 'Processing…' : 'Settle Selected'}</button>
+        </section>
       )}
 
       {msg && <p className="success">{msg}</p>}
