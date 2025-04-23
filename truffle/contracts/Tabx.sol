@@ -11,25 +11,29 @@ contract TabX {
         bool exists;
     }
 
+    struct Debt {
+        address debtor;
+        address creditor;
+        uint256 amount;
+        bool settled;
+    }
+
     mapping(address => bool) public registered;
     mapping(address => string) public usernameOf;
     mapping(uint256 => Group) private groups;
     uint256 public groupCount;
-    mapping(uint256 => mapping(address => mapping(address => bool))) public debtSettled;
+    mapping(uint256 => Debt[]) public groupDebts;
 
-    // Auto-settlement
     mapping(uint256 => uint256) public autoSettlementTime;
     mapping(uint256 => bool) public autoSettlementEnabled;
-
-    // Escrow
     mapping(uint256 => mapping(address => uint256)) public groupEscrow;
 
-    // Events
     event UserRegistered(address indexed user, string username);
     event GroupCreated(uint256 indexed groupId, address indexed owner, string name);
     event GroupDeleted(uint256 indexed groupId);
     event MemberAdded(uint256 indexed groupId, address member);
     event MemberRemoved(uint256 indexed groupId, address member);
+    event DebtAdded(uint256 indexed groupId, address debtor, address creditor, uint256 amount);
     event DebtSettled(uint256 indexed groupId, address indexed debtor, address indexed creditor, uint256 amount);
     event AutoSettlementScheduled(uint256 indexed groupId, uint256 timestamp);
     event AutoSettlementExecuted(uint256 indexed groupId);
@@ -70,16 +74,6 @@ contract TabX {
         g.isMember[msg.sender] = true;
         g.members.push(msg.sender);
         emit GroupCreated(gid, msg.sender, name);
-    }
-
-    function deleteGroup(uint256 groupId)
-        external
-        onlyRegistered
-        groupExists(groupId)
-        onlyGroupOwner(groupId)
-    {
-        groups[groupId].exists = false;
-        emit GroupDeleted(groupId);
     }
 
     function addMember(uint256 groupId, address member)
@@ -123,49 +117,55 @@ contract TabX {
         emit SecurityDeposited(groupId, msg.sender, msg.value);
     }
 
-    function settleDebtByName(
-        uint256 groupId,
-        string calldata debtorUsername,
-        uint256 paymentAmount
-    ) external payable groupExists(groupId) {
-        address debtor = msg.sender;
-        require(registered[debtor], "Debtor not registered");
-        require(paymentAmount > 0, "Amount must be positive");
-        require(msg.value == paymentAmount, "Incorrect payment amount");
-        require(
-            keccak256(bytes(usernameOf[debtor])) == keccak256(bytes(debtorUsername)),
-            "Debtor username mismatch"
-        );
-        Group storage g = groups[groupId];
-        require(g.isMember[debtor], "Debtor not in group");
-        for (uint i = 0; i < g.members.length; i++) {
-            address cred = g.members[i];
-            if (cred != debtor) {
-                debtSettled[groupId][debtor][cred] = true;
-                emit DebtSettled(groupId, debtor, cred, paymentAmount);
-            }
-        }
-        payable(g.owner).transfer(paymentAmount);
+    function addDebt(uint256 groupId, address creditor, uint256 amount)
+        external
+        onlyRegistered
+        groupExists(groupId)
+    {
+        require(groups[groupId].isMember[msg.sender], "Debtor not in group");
+        require(groups[groupId].isMember[creditor], "Creditor not in group");
+        groupDebts[groupId].push(Debt({
+            debtor: msg.sender,
+            creditor: creditor,
+            amount: amount,
+            settled: false
+        }));
+        emit DebtAdded(groupId, msg.sender, creditor, amount);
     }
 
-    // ✅ NEW FUNCTION: Settle debt using escrow funds only
-    function settleFromEscrow(
-        uint256 groupId,
-        address creditor,
-        uint256 amount
-    ) external onlyRegistered groupExists(groupId) {
-        address debtor = msg.sender;
-        require(groups[groupId].isMember[debtor], "Not a group member");
-        require(groups[groupId].isMember[creditor], "Invalid creditor");
-        require(!debtSettled[groupId][debtor][creditor], "Already settled");
-        require(groupEscrow[groupId][debtor] >= amount, "Insufficient escrow");
+    function settleFromEscrow(uint256 groupId, uint256 index)
+        external
+        onlyRegistered
+        groupExists(groupId)
+    {
+        Debt storage d = groupDebts[groupId][index];
+        require(msg.sender == d.debtor, "Only debtor can settle");
+        require(!d.settled, "Already settled");
+        require(groupEscrow[groupId][msg.sender] >= d.amount, "Insufficient escrow");
+        groupEscrow[groupId][msg.sender] -= d.amount;
+        payable(d.creditor).transfer(d.amount);
+        d.settled = true;
+        emit DebtSettled(groupId, d.debtor, d.creditor, d.amount);
+    }
 
-        groupEscrow[groupId][debtor] -= amount;
-        payable(creditor).transfer(amount);
-        debtSettled[groupId][debtor][creditor] = true;
-
-        emit DebtSettled(groupId, debtor, creditor, amount);
-        emit EscrowUsedForSettlement(groupId, debtor, creditor, amount);
+    function triggerAutoSettlement(uint256 groupId)
+        external
+        onlyRegistered
+        groupExists(groupId)
+    {
+        require(autoSettlementEnabled[groupId], "Auto-settlement not enabled");
+        require(block.timestamp >= autoSettlementTime[groupId], "Too early");
+        Debt[] storage debts = groupDebts[groupId];
+        for (uint i = 0; i < debts.length; i++) {
+            if (!debts[i].settled && groupEscrow[groupId][debts[i].debtor] >= debts[i].amount) {
+                groupEscrow[groupId][debts[i].debtor] -= debts[i].amount;
+                payable(debts[i].creditor).transfer(debts[i].amount);
+                debts[i].settled = true;
+                emit DebtSettled(groupId, debts[i].debtor, debts[i].creditor, debts[i].amount);
+            }
+        }
+        autoSettlementEnabled[groupId] = false;
+        emit AutoSettlementExecuted(groupId);
     }
 
     function scheduleAutoSettlement(uint256 groupId, uint256 delayInSeconds)
@@ -179,36 +179,6 @@ contract TabX {
         emit AutoSettlementScheduled(groupId, autoSettlementTime[groupId]);
     }
 
-    function triggerAutoSettlement(uint256 groupId)
-        external
-        onlyRegistered
-        groupExists(groupId)
-    {
-        require(autoSettlementEnabled[groupId], "Auto-settlement not enabled");
-        require(block.timestamp >= autoSettlementTime[groupId], "Too early");
-
-        Group storage g = groups[groupId];
-        for (uint i = 0; i < g.members.length; i++) {
-            address debtor = g.members[i];
-            for (uint j = 0; j < g.members.length; j++) {
-                address creditor = g.members[j];
-                if (debtor == creditor) continue;
-                if (!debtSettled[groupId][debtor][creditor]) {
-                    uint256 amount = 0.01 ether; // Placeholder
-                    if (groupEscrow[groupId][debtor] >= amount) {
-                        groupEscrow[groupId][debtor] -= amount;
-                        payable(creditor).transfer(amount);
-                        debtSettled[groupId][debtor][creditor] = true;
-                        emit DebtSettled(groupId, debtor, creditor, amount);
-                        emit EscrowUsedForSettlement(groupId, debtor, creditor, amount);
-                    }
-                }
-            }
-        }
-        autoSettlementEnabled[groupId] = false;
-        emit AutoSettlementExecuted(groupId);
-    }
-
     function getGroupMembers(uint256 groupId)
         external
         view
@@ -216,14 +186,6 @@ contract TabX {
         returns (address[] memory)
     {
         return groups[groupId].members;
-    }
-
-    function isSettled(uint256 groupId, address debtor, address creditor)
-        external
-        view
-        returns (bool)
-    {
-        return debtSettled[groupId][debtor][creditor];
     }
 
     function getGroupInfo(uint256 groupId)
@@ -234,5 +196,22 @@ contract TabX {
     {
         Group storage g = groups[groupId];
         return (g.id, g.name, g.owner, g.exists);
+    }
+
+    function getDebt(uint256 groupId, uint256 index)
+        external
+        view
+        returns (address debtor, address creditor, uint256 amount, bool settled)
+    {
+        Debt storage d = groupDebts[groupId][index];
+        return (d.debtor, d.creditor, d.amount, d.settled);
+    }
+
+    function getDebtCount(uint256 groupId)
+        external
+        view
+        returns (uint256)
+    {
+        return groupDebts[groupId].length;
     }
 }

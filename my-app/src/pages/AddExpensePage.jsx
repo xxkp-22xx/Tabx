@@ -115,15 +115,18 @@ export default function AddExpensePage() {
     setCustomShares(cs => ({ ...cs, [addr]: val }));
 
   // Add new split
-  const handleAdd = e => {
+  const handleAdd = async e => {
     e.preventDefault();
     setErr(''); setMsg('');
     if (!splitName || !payer || participants.length === 0 || !amount) {
       return setErr('Please complete the form');
     }
+
+    const contract = await getContract();
     const ethVal = currency === 'CAD' ? (Number(amount) / ethToCad).toString() : amount;
     const raw = new BN(web3.utils.toWei(ethVal, 'ether'));
     let shares = [];
+
     if (logic === 'Equal') {
       const cnt = new BN(participants.length.toString());
       const each = raw.div(cnt);
@@ -143,23 +146,18 @@ export default function AddExpensePage() {
       });
       if (!acc.eq(raw)) shares[shares.length - 1] = shares[shares.length - 1].add(raw.sub(acc));
     }
-    const splits = participants
-      .filter(d => d !== payer)
-      .map((d, i) => ({ debtor: d, amountWei: shares[i].toString() }));
-    const txn = {
-      type: 'create',
-      name: splitName,
-      payer,
-      splits,
-      approvals: [],
-      logic,
-      currency,
-      amount,
-      timestamp: new Date().toLocaleString(),
-      groupId: selectedGroup
-    };
-    setHistory(h => [...h, txn]);
-    setMsg('Split created; awaiting approvals');
+
+    try {
+      const txns = participants.filter(d => d !== payer).map(async (d, i) => {
+        const weiStr = shares[i].toString();
+        return await contract.methods.addDebt(selectedGroup, payer, weiStr).send({ from: d });
+      });
+      await Promise.all(txns);
+      setMsg('Expense submitted to chain for settlement');
+    } catch (err) {
+      console.error(err);
+      setErr('Failed to submit on-chain debts');
+    }
   };
 
   // Start edit

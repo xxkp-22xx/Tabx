@@ -4,6 +4,8 @@ import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-do
 import GroupHomePage from './pages/GroupsHome.jsx';
 import AddExpensePage from './pages/AddExpensePage.jsx';
 import SettleDebtPage from './pages/SettleDebtPage.jsx';
+import getContract from './utils/contract.jsx';
+window.getContract = getContract;
 
 function App() {
   return (
