@@ -1,7 +1,8 @@
+// ✅ Fully updated SettleDebtPage.jsx to fetch and settle on-chain debts using settleFromEscrow()
 import React, { useState, useEffect } from 'react';
 import BN from 'bn.js';
 import web3 from '../utils/web3';
-import contract from '../utils/contract';
+import getContract from '../utils/contract';
 import "../styles/styles.css";
 
 export default function SettleDebtPage() {
@@ -10,26 +11,16 @@ export default function SettleDebtPage() {
   const [registeredUsers, setRegisteredUsers] = useState([]);
   const [groups, setGroups] = useState([]);
   const [selectedGroup, setSelectedGroup] = useState('');
-  const [debts, setDebts] = useState([]);
-  const [creditorSelections, setCreditorSelections] = useState({});
+  const [groupDebts, setGroupDebts] = useState([]);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [settling, setSettling] = useState(false);
+  const [escrowBalance, setEscrowBalance] = useState('0');
 
-  const storageKey = selectedAccount ? `debts:${selectedAccount}` : null;
-  const shortAddr = a => a.slice(0,8) + '…';
-  const findUsername = a => {
-    const u = registeredUsers.find(u => u.address === a);
-    return u ? u.username : a;
-  };
-  const formatEthWei = rawWei => {
-    const wei = rawWei.split('.')[0];
-    const fullEth = web3.utils.fromWei(wei, 'ether');
-    const [w,f=''] = fullEth.split('.');
-    return `${w}.${(f+'00').slice(0,2)} ETH / ${wei} WEI`;
-  };
+  const shortAddr = a => a.slice(0, 8) + '…';
+  const findUsername = a => registeredUsers.find(u => u.address === a)?.username || a;
+  const formatEth = wei => `${Number(web3.utils.fromWei(wei, 'ether')).toFixed(4)} ETH`;
 
-  // load accounts
   useEffect(() => {
     web3.eth.getAccounts().then(accs => {
       setAccounts(accs);
@@ -37,85 +28,76 @@ export default function SettleDebtPage() {
     });
   }, []);
 
-  // hydrate debts and fetch chain data when account changes
   useEffect(() => {
     if (!selectedAccount) return;
-    try {
-      const saved = localStorage.getItem(storageKey);
-      setDebts(saved ? JSON.parse(saved) : []);
-    } catch {
-      setDebts([]);
-    }
-    fetchRegisteredUsers();
-    fetchGroups();
+    fetchChainData();
     setSelectedGroup('');
-    setCreditorSelections({});
-    setMsg(''); setErr('');
+    setGroupDebts([]);
+    setMsg('');
+    setErr('');
   }, [selectedAccount]);
 
-  // build selections for this debtor in the group
   useEffect(() => {
-    if (!selectedGroup) {
-      setCreditorSelections({});
-      return;
-    }
-    // all debts for this account in the group
-    const myDebts = debts.filter(d => d.groupId === selectedGroup && d.debtor === selectedAccount);
-    const sel = {};
-    myDebts.forEach(d => {
-      sel[d.creditor] = { checked: false, paymentWei: d.amountWei };
-    });
-    setCreditorSelections(sel);
-  }, [selectedGroup, debts, selectedAccount]);
+    if (!selectedGroup) return;
+    fetchGroupDebts();
+    fetchEscrow();
+  }, [selectedGroup]);
 
-  const toggleCreditor = cred => {
-    setCreditorSelections(cs => ({
-      ...cs,
-      [cred]: { ...cs[cred], checked: !cs[cred].checked }
-    }));
-  };
-
-  const changePayment = (cred, valEth) => {
-    const wei = web3.utils.toWei(valEth || '0', 'ether');
-    setCreditorSelections(cs => ({
-      ...cs,
-      [cred]: { ...cs[cred], paymentWei: wei }
-    }));
-  };
-
-  const handleSettle = async () => {
-    setErr(''); setMsg(''); setSettling(true);
-    try {
-      const debtorUsername = findUsername(selectedAccount);
-      let updated = [...debts];
-
-      for (const [cred, { checked, paymentWei }] of Object.entries(creditorSelections)) {
-        if (!checked) continue;
-        await contract.methods
-          .settleDebtByName(
-            Number(selectedGroup),
-            debtorUsername,
-            paymentWei
-          )
-          .send({ from: selectedAccount, value: paymentWei, gas: 300000 });
-
-        // update local debts array
-        updated = updated.map(d => {
-          if (d.groupId === selectedGroup && d.debtor === selectedAccount && d.creditor === cred) {
-            const owed = new BN(d.amountWei);
-            const pay  = new BN(paymentWei);
-            const rem  = owed.sub(pay);
-            return { ...d, amountWei: rem.gte(new BN(0)) ? rem.toString() : '0' };
-          }
-          return d;
-        });
+  const fetchChainData = async () => {
+    const contract = await getContract();
+    const regs = [];
+    for (const addr of accounts) {
+      const isReg = await contract.methods.registered(addr).call({ from: selectedAccount });
+      if (isReg) {
+        const name = await contract.methods.usernameOf(addr).call({ from: selectedAccount });
+        regs.push({ address: addr, username: name });
       }
+    }
+    setRegisteredUsers(regs);
 
-      // persist updated debts
-      setDebts(updated);
-      if (storageKey) localStorage.setItem(storageKey, JSON.stringify(updated));
+    const cnt = Number(await contract.methods.groupCount().call({ from: selectedAccount }));
+    const arr = [];
+    for (let i = 1; i <= cnt; i++) {
+      const info = await contract.methods.getGroupInfo(i).call({ from: selectedAccount });
+      if (info.exists) arr.push({ id: i, name: info.name });
+    }
+    setGroups(arr);
+  };
 
-      setMsg('Settlement successful');
+  const fetchGroupDebts = async () => {
+    const contract = await getContract();
+    const count = await contract.methods.getDebtCount(selectedGroup).call();
+    const debts = [];
+    for (let i = 0; i < count; i++) {
+  const debt = await contract.methods.getDebt(selectedGroup, i).call(); // ✅
+  debts.push({ index: i, ...debt });
+}
+
+    setGroupDebts(debts);
+  };
+
+  const fetchEscrow = async () => {
+    try {
+      const contract = await getContract();
+      const amount = await contract.methods.groupEscrow(selectedGroup, selectedAccount).call();
+      setEscrowBalance(web3.utils.fromWei(amount, 'ether'));
+    } catch (e) {
+      console.error("Failed to fetch escrow:", e);
+    }
+  };
+
+  const handleSettle = async (debt) => {
+    setErr('');
+    setMsg('');
+    setSettling(true);
+    try {
+      const contract = await getContract();
+      await contract.methods
+        .settleFromEscrow(Number(selectedGroup), debt.index)
+        .send({ from: selectedAccount });
+      setMsg(`Settled debt to ${findUsername(debt.creditor)}`);
+      await fetchGroupDebts();
+      await fetchEscrow();
     } catch (e) {
       console.error(e);
       setErr('Settlement failed: ' + (e.message || e));
@@ -123,38 +105,10 @@ export default function SettleDebtPage() {
     setSettling(false);
   };
 
-  const fetchRegisteredUsers = async () => {
-    const regs = [];
-    for (const addr of accounts) {
-      if (await contract.methods.registered(addr).call({ from: selectedAccount })) {
-        const name = await contract.methods.usernameOf(addr).call({ from: selectedAccount });
-        regs.push({ address: addr, username: name });
-      }
-    }
-    setRegisteredUsers(regs);
-  };
-
-  const fetchGroups = async () => {
-    const cnt = Number(await contract.methods.groupCount().call({ from: selectedAccount }));
-    const arr = [];
-    for (let i = 1; i <= cnt; i++) {
-      const info = await contract.methods.getGroupInfo(i).call({ from: selectedAccount });
-      if (!info.exists) continue;
-      arr.push({ id: i, name: info.name });
-    }
-    setGroups(arr);
-  };
-
-  // filtered views
-  const groupAllDebts = debts.filter(d => d.groupId === selectedGroup);
-  const myGroupDebts  = groupAllDebts.filter(d => d.debtor === selectedAccount);
-  const totalOwed     = myGroupDebts.reduce((sum, d) => sum.add(new BN(d.amountWei)), new BN(0));
-
   return (
     <div className="settle-page">
       <h1>Settle Debts</h1>
 
-      {/* Account & Group Selectors */}
       <div className="controls">
         <label>Account:
           <select value={selectedAccount} onChange={e => setSelectedAccount(e.target.value)}>
@@ -169,43 +123,28 @@ export default function SettleDebtPage() {
         </label>
       </div>
 
-      {/* Group-specific debts table */}
-      {selectedGroup && groupAllDebts.length > 0 && (
+      {selectedGroup && <p>Your Escrow Balance: {escrowBalance} ETH</p>}
+
+      {selectedGroup && groupDebts.length > 0 && (
         <section>
-          <h2>All Debts in Group {selectedGroup}</h2>
+          <h2>Group Debts</h2>
           <table>
-            <thead><tr><th>Debtor</th><th>Creditor</th><th>Amount</th></tr></thead>
+            <thead><tr><th>Debtor</th><th>Creditor</th><th>Amount</th><th>Action</th></tr></thead>
             <tbody>
-              {groupAllDebts.map((d,i) => (
+              {groupDebts.map((d, i) => (
                 <tr key={i}>
                   <td>{findUsername(d.debtor)}</td>
                   <td>{findUsername(d.creditor)}</td>
-                  <td>{formatEthWei(d.amountWei)}</td>
+                  <td>{formatEth(d.amount)}</td>
+                  <td>
+                    {d.debtor === selectedAccount && !d.settled ? (
+                      <button onClick={() => handleSettle(d)} disabled={settling}>Settle</button>
+                    ) : d.settled ? 'Settled' : '—'}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </section>
-      )}
-
-      {/* Settlement UI for current account */}
-      {selectedGroup && myGroupDebts.length > 0 && (
-        <section className="creditor-list">
-          <h2>Your Debts: Total {formatEthWei(totalOwed.toString())}</h2>
-          <table>
-            <thead><tr><th></th><th>Creditor</th><th>Owed</th><th>Pay</th></tr></thead>
-            <tbody>
-              {Object.entries(creditorSelections).map(([cred, { checked, paymentWei }]) => (
-                <tr key={cred}>
-                  <td><input type="checkbox" checked={checked} onChange={() => toggleCreditor(cred)} /></td>
-                  <td>{findUsername(cred)}</td>
-                  <td>{formatEthWei(myGroupDebts.find(d => d.creditor===cred).amountWei)}</td>
-                  <td><input type="number" step="0.01" disabled={!checked} value={web3.utils.fromWei(paymentWei,'ether')} onChange={e => changePayment(cred,e.target.value)} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <button onClick={handleSettle} disabled={settling}>{settling ? 'Processing…' : 'Settle Selected'}</button>
         </section>
       )}
 
