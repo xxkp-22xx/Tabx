@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import BN from 'bn.js';
 import web3 from '../utils/web3';
-import contract from '../utils/contract';
+import getContract from '../utils/contract'; // ✅ Fix: correct import
 import "../styles/styles.css";
 
 export default function AddExpensePage() {
-  // Blockchain & local data
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState('');
   const [registeredUsers, setRegisteredUsers] = useState([]);
@@ -13,23 +12,18 @@ export default function AddExpensePage() {
   const [selectedGroup, setSelectedGroup] = useState('');
   const [groupMembers, setGroupMembers] = useState([]);
 
-  // Form fields
   const [splitName, setSplitName] = useState('');
   const [payer, setPayer] = useState('');
   const [participants, setParticipants] = useState([]);
   const [logic, setLogic] = useState('Equal');
-  const [currency, setCurrency] = useState('ETH'); // 'ETH' or 'CAD'
+  const [currency, setCurrency] = useState('ETH');
   const [amount, setAmount] = useState('');
   const [customShares, setCustomShares] = useState({});
 
-  // Exchange rate
   const [ethToCad, setEthToCad] = useState(0);
-
-  // Persisted transactions
   const [debts, setDebts] = useState([]);
   const [history, setHistory] = useState([]);
 
-  // Edit state
   const [editingIdx, setEditingIdx] = useState(null);
   const [editName, setEditName] = useState('');
   const [editLogic, setEditLogic] = useState('Equal');
@@ -43,24 +37,17 @@ export default function AddExpensePage() {
   const storageKey = selectedAccount ? `debts:${selectedAccount}` : null;
   const historyKey = selectedAccount ? `history:${selectedAccount}` : null;
 
-  // Utilities
   const findUsername = addr => {
     const u = registeredUsers.find(u => u.address === addr);
     return u ? u.username : addr;
   };
-  const formatEth = wei => {
-    const eth = web3.utils.fromWei(wei, 'ether');
-    return `${Number(eth).toFixed(4)} ETH`;
-  };
+  const formatEth = wei => `${Number(web3.utils.fromWei(wei, 'ether')).toFixed(4)} ETH`;
   const formatCad = cad => `${Number(cad).toFixed(2)} CAD`;
 
-  // Fetch ETH->CAD every 5 minutes
   useEffect(() => {
     const fetchRate = async () => {
       try {
-        const res = await fetch(
-          'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=cad'
-        );
+        const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=cad');
         const data = await res.json();
         setEthToCad(data.ethereum.cad || 0);
       } catch {
@@ -72,7 +59,6 @@ export default function AddExpensePage() {
     return () => clearInterval(id);
   }, []);
 
-  // Load accounts
   useEffect(() => {
     web3.eth.getAccounts().then(accs => {
       setAccounts(accs);
@@ -80,22 +66,21 @@ export default function AddExpensePage() {
     });
   }, []);
 
-  // Hydrate & fetch on-chain data
   useEffect(() => {
     if (!selectedAccount) return;
     setDebts(JSON.parse(localStorage.getItem(storageKey)) || []);
     setHistory(JSON.parse(localStorage.getItem(historyKey)) || []);
     (async () => {
-      // Registered users
+      const contract = await getContract(); // ✅ Fix here
       const regs = [];
       for (const addr of accounts) {
-        if (await contract.methods.registered(addr).call({ from: selectedAccount })) {
+        const isReg = await contract.methods.registered(addr).call({ from: selectedAccount });
+        if (isReg) {
           const name = await contract.methods.usernameOf(addr).call({ from: selectedAccount });
           regs.push({ address: addr, username: name });
         }
       }
       setRegisteredUsers(regs);
-      // Groups
       const cnt = Number(await contract.methods.groupCount().call({ from: selectedAccount }));
       const arr = [];
       for (let i = 1; i <= cnt; i++) {
@@ -106,22 +91,22 @@ export default function AddExpensePage() {
     })();
   }, [selectedAccount, accounts, storageKey, historyKey]);
 
-  // Persist local data
   useEffect(() => {
     if (storageKey) localStorage.setItem(storageKey, JSON.stringify(debts));
   }, [debts, storageKey]);
+
   useEffect(() => {
     if (historyKey) localStorage.setItem(historyKey, JSON.stringify(history));
   }, [history, historyKey]);
 
-  // Load group members
   useEffect(() => {
     if (!selectedGroup) return;
-    contract.methods
-      .getGroupMembers(selectedGroup)
-      .call({ from: selectedAccount })
-      .then(setGroupMembers);
-    setParticipants([]);
+    (async () => {
+      const contract = await getContract(); // ✅ Fix here too
+      const members = await contract.methods.getGroupMembers(selectedGroup).call({ from: selectedAccount });
+      setGroupMembers(members);
+      setParticipants([]);
+    })();
   }, [selectedGroup, selectedAccount]);
 
   const toggleParticipant = addr =>
