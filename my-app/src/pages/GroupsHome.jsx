@@ -1,9 +1,7 @@
-// src/pages/GroupHomePage.jsx
 import React, { useState, useEffect } from 'react';
 import web3 from '../utils/web3';
-import contract from '../utils/contract';
+import getContract from '../utils/contract'; // renamed import
 import "../styles/styles.css";
-// import axios from 'axios';
 
 export default function GroupHomePage() {
   const [accounts, setAccounts] = useState([]);
@@ -22,22 +20,22 @@ export default function GroupHomePage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  // load accounts, groups, users
-
   useEffect(() => {
     const init = async () => {
       const accs = await web3.eth.getAccounts();
+      const contract = await getContract(); // initialize contract here
+
       setAccounts(accs);
       if (accs.length) {
         setSelectedAccount(accs[0]);
-        await fetchGroups(accs[0]);
-        await fetchRegisteredUsers(accs[0], accs);
+        await fetchGroups(accs[0], contract);
+        await fetchRegisteredUsers(accs[0], accs, contract);
       }
     };
     init();
   }, []);
 
-  const fetchGroups = async (from) => {
+  const fetchGroups = async (from, contract) => {
     try {
       const count = Number((await contract.methods.groupCount().call({ from })).toString());
       const arr = [];
@@ -58,8 +56,7 @@ export default function GroupHomePage() {
     }
   };
 
-  // fetch registered users
-  const fetchRegisteredUsers = async (from, accs = accounts) => {
+  const fetchRegisteredUsers = async (from, accs, contract) => {
     const regs = [];
     for (const addr of accs) {
       const isReg = await contract.methods.registered(addr).call({ from });
@@ -71,120 +68,84 @@ export default function GroupHomePage() {
     setRegisteredUsers(regs);
   };
 
-  // handle account change
   const handleAccountChange = async (e) => {
     const acct = e.target.value;
     setSelectedAccount(acct);
     setMessage(''); setError('');
-    await fetchGroups(acct);
-    await fetchRegisteredUsers(acct);
+    const contract = await getContract();
+    await fetchGroups(acct, contract);
+    await fetchRegisteredUsers(acct, accounts, contract);
   };
-
-  // register
 
   const handleRegister = async (e) => {
     e.preventDefault();
     setError(''); setMessage('');
     try {
+      const contract = await getContract();
       await contract.methods.registerUser(username)
         .send({ from: selectedAccount, gas: 3000000 });
 
-        // await axios.post('http://localhost:4000/api/users', {
-        //   address: selectedAccount,
-        //   username: username
-        // });
-        // console.log('User registered:', username, selectedAccount);
-
       setMessage(`Registered as ${username}`);
       setUsername('');
-      await fetchRegisteredUsers(selectedAccount);
+      await fetchRegisteredUsers(selectedAccount, accounts, contract);
     } catch (e) {
       setError(e.message);
-      console.error("Failed to POST user to DB:", e);
+      console.error("Failed to register user:", e);
     }
   };
 
-  // create group
   const handleCreateGroup = async (e) => {
     e.preventDefault();
     setError(''); setMessage('');
     try {
+      const contract = await getContract();
       await contract.methods.createGroup(newGroupName)
         .send({ from: selectedAccount, gas: 3000000 });
 
-      // Fetch groups to find newly created group's details
-      await fetchGroups(selectedAccount);
-
-      // After fetching, get the latest group to insert into DB
-      const latestGroupId = groups.length + 1; // since ID increments sequentially
-      // const newGroup = await contract.methods.getGroupInfo(latestGroupId).call({ from: selectedAccount });
+      await fetchGroups(selectedAccount, contract);
+      const latestGroupId = groups.length + 1;
       const members = await contract.methods.getGroupMembers(latestGroupId).call({ from: selectedAccount });
-
-      // console.log({ latestGroupId, newGroupName, selectedAccount, members });
-      // try {
-      //   const response = await axios.post('http://localhost:4000/api/groups', {
-      //     groupId: latestGroupId,
-      //     name: newGroupName,
-      //     owner: selectedAccount,
-      //     members: members
-      //   });
-      //   console.log("Backend response:", response.data);
-      // } catch (err) {
-      //   console.error("Frontend axios error:", err);
-      // }
-      
 
       setMessage(`Group "${newGroupName}" created`);
       setNewGroupName('');
-      await fetchGroups(selectedAccount);
+      await fetchGroups(selectedAccount, contract);
     } catch (e) {
       setError(e.message);
     }
   };
 
-  // add member
   const handleAddMember = async (e) => {
     e.preventDefault();
     setError('');
     setMessage('');
     try {
-      // Call smart contract
-      // console.log("Adding member:", addMemberGroupId, addMemberAddress);
+      const contract = await getContract();
       await contract.methods.addMember(addMemberGroupId, addMemberAddress)
         .send({ from: selectedAccount, gas: 3000000 });
-  
-      // Update MongoDB
-      // await axios.put(`http://localhost:4000/api/groups/${addMemberGroupId}/members`, {
-      //   memberAddress: addMemberAddress
-      // });
-      
-      // console.log("Member added to DB:", addMemberGroupId, addMemberAddress);      
-  
+
       setMessage(`Added ${addMemberAddress} to group ${addMemberGroupId}`);
       setAddMemberAddress('');
-      await fetchGroups(selectedAccount);
+      await fetchGroups(selectedAccount, contract);
     } catch (e) {
       setError(e.message);
     }
   };
-  
 
-  // remove member
   const handleRemoveMember = async (e) => {
     e.preventDefault();
     setError(''); setMessage('');
     try {
+      const contract = await getContract();
       await contract.methods.removeMember(removeMemberGroupId, removeMemberAddress)
         .send({ from: selectedAccount });
       setMessage(`Removed ${removeMemberAddress} from group ${removeMemberGroupId}`);
       setRemoveMemberAddress('');
-      await fetchGroups(selectedAccount);
+      await fetchGroups(selectedAccount, contract);
     } catch (e) {
       setError(e.message);
     }
   };
 
-  // helper to shorten address
   const shortAddr = addr => `${addr.slice(0,8)}…`;
 
   const findUsername = addr => {
