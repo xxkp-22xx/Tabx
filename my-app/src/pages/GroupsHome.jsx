@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import web3 from '../utils/web3';
 import contract from '../utils/contract';
 import "../styles/styles.css";
-import axios from 'axios';
+// import axios from 'axios';
 
 export default function GroupHomePage() {
   const [accounts, setAccounts] = useState([]);
@@ -89,11 +89,11 @@ export default function GroupHomePage() {
       await contract.methods.registerUser(username)
         .send({ from: selectedAccount, gas: 3000000 });
 
-        await axios.post('http://localhost:4000/api/users', {
-          address: selectedAccount,
-          username: username
-        });
-        console.log('User registered:', username, selectedAccount);
+        // await axios.post('http://localhost:4000/api/users', {
+        //   address: selectedAccount,
+        //   username: username
+        // });
+        // console.log('User registered:', username, selectedAccount);
 
       setMessage(`Registered as ${username}`);
       setUsername('');
@@ -120,18 +120,18 @@ export default function GroupHomePage() {
       // const newGroup = await contract.methods.getGroupInfo(latestGroupId).call({ from: selectedAccount });
       const members = await contract.methods.getGroupMembers(latestGroupId).call({ from: selectedAccount });
 
-      console.log({ latestGroupId, newGroupName, selectedAccount, members });
-      try {
-        const response = await axios.post('http://localhost:4000/api/groups', {
-          groupId: latestGroupId,
-          name: newGroupName,
-          owner: selectedAccount,
-          members: members
-        });
-        console.log("Backend response:", response.data);
-      } catch (err) {
-        console.error("Frontend axios error:", err);
-      }
+      // console.log({ latestGroupId, newGroupName, selectedAccount, members });
+      // try {
+      //   const response = await axios.post('http://localhost:4000/api/groups', {
+      //     groupId: latestGroupId,
+      //     name: newGroupName,
+      //     owner: selectedAccount,
+      //     members: members
+      //   });
+      //   console.log("Backend response:", response.data);
+      // } catch (err) {
+      //   console.error("Frontend axios error:", err);
+      // }
       
 
       setMessage(`Group "${newGroupName}" created`);
@@ -149,16 +149,16 @@ export default function GroupHomePage() {
     setMessage('');
     try {
       // Call smart contract
-      console.log("Adding member:", addMemberGroupId, addMemberAddress);
+      // console.log("Adding member:", addMemberGroupId, addMemberAddress);
       await contract.methods.addMember(addMemberGroupId, addMemberAddress)
         .send({ from: selectedAccount, gas: 3000000 });
   
       // Update MongoDB
-      await axios.put(`http://localhost:4000/api/groups/${addMemberGroupId}/members`, {
-        memberAddress: addMemberAddress
-      });
+      // await axios.put(`http://localhost:4000/api/groups/${addMemberGroupId}/members`, {
+      //   memberAddress: addMemberAddress
+      // });
       
-      console.log("Member added to DB:", addMemberGroupId, addMemberAddress);      
+      // console.log("Member added to DB:", addMemberGroupId, addMemberAddress);      
   
       setMessage(`Added ${addMemberAddress} to group ${addMemberGroupId}`);
       setAddMemberAddress('');
