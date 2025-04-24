@@ -160,13 +160,9 @@ app.put("/api/settle", async (req, res) => {
 
     const current = new BN(debt.amountWei);
     const payment = new BN(amountWei);
+    const safePayment = payment.gt(current) ? current : payment;
+    const remaining = current.sub(safePayment);
 
-// Clamp payment to available debt
-const safePayment = payment.gt(current) ? current : payment;
-const remaining = current.sub(safePayment);
-
-
-    // const remaining = current.sub(payment);
     debt.amountWei = remaining.toString();
     debt.settled = remaining.isZero();
     debt.timestamp = new Date();
@@ -179,7 +175,6 @@ const remaining = current.sub(safePayment);
     res.status(500).json({ error: err.message });
   }
 });
-
 
 mongoose
   .connect(

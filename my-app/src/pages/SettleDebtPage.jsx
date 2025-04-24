@@ -22,8 +22,11 @@ export default function SettleDebtPage() {
     const u = registeredUsers.find(u => u.address === addr);
     return u ? u.username : addr;
   };
-  const formatEth = wei =>
-    `${Number(web3.utils.fromWei(wei, 'ether')).toFixed(4)} ETH`;
+  const formatEth = wei => {
+    const cleanWei = String(wei).replace(/[^\d]/g, '') || '0';
+    return `${Number(web3.utils.fromWei(cleanWei, 'ether')).toFixed(4)} ETH`;
+  };
+  
 
   useEffect(() => {
     web3.eth.getAccounts().then(accs => {
@@ -62,97 +65,91 @@ export default function SettleDebtPage() {
     }
     (async () => {
       try {
-        const res = await axios.get(
-          `http://localhost:4000/api/debts`,
-          {
-            params: {
-              groupId: selectedGroup,
-              creditor: selectedAccount,
-              settled: false
-            }
+        const res = await axios.get(`http://localhost:4000/api/debts`, {
+          params: {
+            groupId: selectedGroup,
+            creditor: selectedAccount,
+            // ❌ remove `settled: false` to show all (optional)
           }
-        );
-        const sums = res.data.reduce((acc, d) => {
-          const rawWei = String(d.amountWei).replace(/[^\d]/g, '') || '0';
-          acc[d.debtor] = (acc[d.debtor] || new BN('0')).add(new BN(rawWei));
-          return acc;
-        }, {});
-        setOwedSummaries(
-          Object.entries(sums).map(([debtor, totalBN]) => ({
-            debtor,
-            totalWei: totalBN.toString()
-          }))
-        );
+        });
+  
+        const raw = res.data.map(d => ({
+          debtor: d.debtor,
+          creditor: d.creditor,
+          amountWei: d.amountWei,
+          settled: d.settled
+        }));
+  
+        setOwedSummaries(raw);
       } catch (e) {
         console.error('Failed to load debts', e);
         setErr('Could not fetch debts');
       }
     })();
   }, [selectedAccount, selectedGroup]);
+  
 
-  const handleSettleAll = async (debtor) => {
+  const handleSettleAll = async (debtor, creditor, amountWei) => {
     setErr('');
     setMsg('');
     setSettling(true);
-
+  
     try {
       const c = await getContract();
-      const summary = owedSummaries.find(o => o.debtor === debtor);
-      if (!summary) {
-        throw new Error('No outstanding debt for this user');
+  
+      // ✅ Parse amount safely
+      const totalWei = String(amountWei).replace(/[^\d]/g, '') || '0';
+      const totalEthNum = parseFloat(web3.utils.fromWei(totalWei, 'ether'));
+  
+      if (!totalWei || totalEthNum <= 0) {
+        throw new Error('Nothing to settle.');
       }
-      const totalWei = summary.totalWei;
-
-      const escrowWei = await c.methods
+  
+      const escrowRaw = await c.methods
         .groupEscrow(selectedGroup, debtor)
-        .call({ from: selectedAccount });
-
-      if (new BN(escrowWei).gte(new BN(totalWei))) {
+        .call({ from: creditor });
+  
+      const escrowEthNum = parseFloat(web3.utils.fromWei(escrowRaw, 'ether'));
+      let txSuccessful = false;
+  
+      if (escrowEthNum >= totalEthNum) {
         await c.methods
-          .settleFromEscrow(
-            Number(selectedGroup),
-            selectedAccount,
-            totalWei
-          )
+          .settleFromEscrow(Number(selectedGroup), creditor, totalWei)
           .send({ from: debtor });
-        setMsg(
-          `Settled ${formatEth(totalWei)} from escrow for ${findUsername(debtor)}`
-        );
+  
+        setMsg(`Settled ${formatEth(totalWei)} from escrow`);
+        txSuccessful = true;
       } else {
         const debtorUsername = findUsername(debtor);
         await c.methods
-          .settleDebtByName(
-            Number(selectedGroup),
-            debtorUsername,
-            totalWei
-          )
-          .send({
-            from: debtor,
-            value: totalWei,
-            gas: 500_000
-          });
-        setMsg(
-          `Paid ${formatEth(totalWei)} directly from ${findUsername(debtor)}`
-        );
+          .settleDebtByName(Number(selectedGroup), debtorUsername, totalWei)
+          .send({ from: debtor, value: totalWei, gas: 500_000 });
+  
+        setMsg(`Paid ${formatEth(totalWei)} directly`);
+        txSuccessful = true;
       }
-
-      await axios.put("http://localhost:4000/api/settle", {
-        groupId: Number(selectedGroup),
-        debtor,
-        creditor: selectedAccount,
-        amountWei: totalWei
-      });
-      
-
+  
+      if (txSuccessful) {
+        await axios.put("http://localhost:4000/api/settle", {
+          groupId: Number(selectedGroup),
+          debtor,
+          creditor,
+          amountWei: totalWei
+        });
+      }
     } catch (e) {
       console.error('Batch settlement failed', e);
       const reason = e.response?.data?.error || e.message;
       setErr('Settlement failed: ' + reason);
     } finally {
       setSettling(false);
-      setSelectedGroup(g => g);
+      setSelectedGroup(g => g); // refresh
     }
   };
+  
+  
+  
+  
 
   return (
     <div className="settle-page">
@@ -189,35 +186,42 @@ export default function SettleDebtPage() {
       </div>
 
       {owedSummaries.length > 0 && (
-        <section>
-          <h2>Outstanding Debts (Group {selectedGroup})</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Debtor</th>
-                <th>Amount</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {owedSummaries.map(({ debtor, totalWei }) => (
-                <tr key={debtor}>
-                  <td>{findUsername(debtor)}</td>
-                  <td>{formatEth(totalWei)}</td>
-                  <td>
-                    <button
-                      onClick={() => handleSettleAll(debtor)}
-                      disabled={settling}
-                    >
-                      {settling ? 'Processing…' : 'Settle'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      )}
+  <section>
+    <h2>Outstanding Debts (Group {selectedGroup})</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Debtor</th>
+          <th>Creditor</th>
+          <th>Amount</th>
+          <th>Settled</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {owedSummaries.map((d, i) => (
+          <tr key={i}>
+            <td>{findUsername(d.debtor)}</td>
+            <td>{findUsername(d.creditor)}</td>
+            <td>{formatEth(d.amountWei)}</td>
+            <td>{d.settled ? '✅' : '❌'}</td>
+            <td>
+              {!d.settled && d.debtor === selectedAccount && (
+                <button
+                onClick={() => handleSettleAll(d.debtor, d.creditor, d.amountWei)}
+                disabled={settling}
+              >
+                {settling ? 'Processing…' : 'Settle'}
+              </button>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </section>
+)}
+
 
       {msg && <p className="success">{msg}</p>}
       {err && <p className="error">{err}</p>}
