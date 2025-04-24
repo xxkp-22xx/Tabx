@@ -1,26 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import web3 from '../utils/web3';
-import getContract from '../utils/contract';
+import React, { useState, useEffect } from "react";
+import web3 from "../utils/web3";
+import getContract from "../utils/contract";
+import axios from "axios"; // Make sure this is imported at the top
 import "../styles/styles.css";
 
 export default function GroupHomePage() {
   const [accounts, setAccounts] = useState([]);
-  const [selectedAccount, setSelectedAccount] = useState('');
+  const [selectedAccount, setSelectedAccount] = useState("");
   const [registeredUsers, setRegisteredUsers] = useState([]);
-  const [username, setUsername] = useState('');
-  const [newGroupName, setNewGroupName] = useState('');
+  const [username, setUsername] = useState("");
+  const [newGroupName, setNewGroupName] = useState("");
   const [groups, setGroups] = useState([]);
 
-  const [addMemberGroupId, setAddMemberGroupId] = useState('');
-  const [addMemberAddress, setAddMemberAddress] = useState('');
-  const [removeMemberGroupId, setRemoveMemberGroupId] = useState('');
-  const [removeMemberAddress, setRemoveMemberAddress] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [settlementDelay, setSettlementDelay] = useState('');
+  const [addMemberGroupId, setAddMemberGroupId] = useState("");
+  const [addMemberAddress, setAddMemberAddress] = useState("");
+  const [removeMemberGroupId, setRemoveMemberGroupId] = useState("");
+  const [removeMemberAddress, setRemoveMemberAddress] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [settlementDelay, setSettlementDelay] = useState("");
   const [autoTimes, setAutoTimes] = useState({});
   const [escrowAmounts, setEscrowAmounts] = useState({});
-  const [depositAmount, setDepositAmount] = useState('');
+  const [depositAmount, setDepositAmount] = useState("");
 
   useEffect(() => {
     const init = async () => {
@@ -40,24 +41,33 @@ export default function GroupHomePage() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setAutoTimes(prev => ({ ...prev }));
+      setAutoTimes((prev) => ({ ...prev }));
     }, 1000);
     return () => clearInterval(interval);
   }, []);
 
   const fetchGroups = async (from, contract) => {
     try {
-      const count = Number((await contract.methods.groupCount().call({ from })).toString());
+      const count = Number(
+        (await contract.methods.groupCount().call({ from })).toString()
+      );
       const arr = [];
       for (let i = 1; i <= count; i++) {
         const info = await contract.methods.getGroupInfo(i).call({ from });
         if (!info.exists) continue;
-        const members = await contract.methods.getGroupMembers(i).call({ from });
-        arr.push({ id: Number(info.id.toString()), name: info.name, owner: info.owner, members });
+        const members = await contract.methods
+          .getGroupMembers(i)
+          .call({ from });
+        arr.push({
+          id: Number(info.id.toString()),
+          name: info.name,
+          owner: info.owner,
+          members,
+        });
       }
       setGroups(arr);
     } catch {
-      setError('Failed to load groups');
+      setError("Failed to load groups");
     }
   };
 
@@ -76,8 +86,12 @@ export default function GroupHomePage() {
   const fetchAutoSettlementTimes = async (contract, from) => {
     const result = {};
     for (const g of groups) {
-      const time = await contract.methods.autoSettlementTime(g.id).call({ from });
-      const enabled = await contract.methods.autoSettlementEnabled(g.id).call({ from });
+      const time = await contract.methods
+        .autoSettlementTime(g.id)
+        .call({ from });
+      const enabled = await contract.methods
+        .autoSettlementEnabled(g.id)
+        .call({ from });
       if (enabled && time > 0) result[g.id] = Number(time);
     }
     setAutoTimes(result);
@@ -87,7 +101,7 @@ export default function GroupHomePage() {
     const result = {};
     for (const g of groups) {
       const amount = await contract.methods.groupEscrow(g.id, from).call();
-      result[g.id] = web3.utils.fromWei(amount, 'ether');
+      result[g.id] = web3.utils.fromWei(amount, "ether");
     }
     setEscrowAmounts(result);
   };
@@ -95,10 +109,12 @@ export default function GroupHomePage() {
   const handleDepositToEscrow = async (groupId) => {
     try {
       const contract = await getContract();
-      const value = web3.utils.toWei(depositAmount, 'ether');
-      await contract.methods.depositSecurity(groupId).send({ from: selectedAccount, value });
+      const value = web3.utils.toWei(depositAmount, "ether");
+      await contract.methods
+        .depositSecurity(groupId)
+        .send({ from: selectedAccount, value });
       setMessage(`Deposited ${depositAmount} ETH to Group ${groupId}`);
-      setDepositAmount('');
+      setDepositAmount("");
       await fetchEscrowAmounts(contract, selectedAccount);
     } catch (err) {
       console.error(err);
@@ -109,7 +125,8 @@ export default function GroupHomePage() {
   const handleAccountChange = async (e) => {
     const acct = e.target.value;
     setSelectedAccount(acct);
-    setMessage(''); setError('');
+    setMessage("");
+    setError("");
     const contract = await getContract();
     await fetchGroups(acct, contract);
     await fetchRegisteredUsers(acct, accounts, contract);
@@ -119,12 +136,15 @@ export default function GroupHomePage() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    setError(''); setMessage('');
+    setError("");
+    setMessage("");
     try {
       const contract = await getContract();
-      await contract.methods.registerUser(username).send({ from: selectedAccount, gas: 3000000 });
+      await contract.methods
+        .registerUser(username)
+        .send({ from: selectedAccount, gas: 3000000 });
       setMessage(`Registered as ${username}`);
-      setUsername('');
+      setUsername("");
       await fetchRegisteredUsers(selectedAccount, accounts, contract);
     } catch (e) {
       setError(e.message);
@@ -133,15 +153,39 @@ export default function GroupHomePage() {
 
   const handleCreateGroup = async (e) => {
     e.preventDefault();
-    setError(''); setMessage('');
+    setError("");
+    setMessage("");
+
     try {
       const contract = await getContract();
-      await contract.methods.createGroup(newGroupName).send({ from: selectedAccount, gas: 3000000 });
+
+      // 1. Create group on blockchain
+      await contract.methods
+        .createGroup(newGroupName)
+        .send({ from: selectedAccount, gas: 3000000 });
+
+      // 2. Refetch group list from contract
       await fetchGroups(selectedAccount, contract);
+
+      // 3. Compute the latest groupId
       const latestGroupId = groups.length + 1;
-      await contract.methods.getGroupMembers(latestGroupId).call({ from: selectedAccount });
+
+      // 4. Get group members from contract (usually just the owner for now)
+      const members = await contract.methods
+        .getGroupMembers(latestGroupId)
+        .call({ from: selectedAccount });
+
+      // 5. Save group data in MongoDB
+      await axios.post("http://localhost:4000/api/groups", {
+        groupId: latestGroupId,
+        name: newGroupName,
+        owner: selectedAccount,
+        members: members, // optional: include member list
+      });
+
+      // 6. Success UI update
       setMessage(`Group "${newGroupName}" created`);
-      setNewGroupName('');
+      setNewGroupName("");
       await fetchGroups(selectedAccount, contract);
     } catch (e) {
       setError(e.message);
@@ -150,12 +194,28 @@ export default function GroupHomePage() {
 
   const handleAddMember = async (e) => {
     e.preventDefault();
-    setError(''); setMessage('');
+    setError("");
+    setMessage("");
+
     try {
       const contract = await getContract();
-      await contract.methods.addMember(addMemberGroupId, addMemberAddress).send({ from: selectedAccount, gas: 3000000 });
+
+      // 1. Call smart contract to add member
+      await contract.methods
+        .addMember(addMemberGroupId, addMemberAddress)
+        .send({ from: selectedAccount, gas: 3000000 });
+
+      // 2. Patch call to MongoDB backend
+      await axios.patch(
+        `http://localhost:4000/api/groups/${addMemberGroupId}/members`,
+        {
+          member: addMemberAddress,
+        }
+      );
+
+      // 3. UI updates
       setMessage(`Added ${addMemberAddress} to group ${addMemberGroupId}`);
-      setAddMemberAddress('');
+      setAddMemberAddress("");
       await fetchGroups(selectedAccount, contract);
     } catch (e) {
       setError(e.message);
@@ -164,12 +224,17 @@ export default function GroupHomePage() {
 
   const handleRemoveMember = async (e) => {
     e.preventDefault();
-    setError(''); setMessage('');
+    setError("");
+    setMessage("");
     try {
       const contract = await getContract();
-      await contract.methods.removeMember(removeMemberGroupId, removeMemberAddress).send({ from: selectedAccount });
-      setMessage(`Removed ${removeMemberAddress} from group ${removeMemberGroupId}`);
-      setRemoveMemberAddress('');
+      await contract.methods
+        .removeMember(removeMemberGroupId, removeMemberAddress)
+        .send({ from: selectedAccount });
+      setMessage(
+        `Removed ${removeMemberAddress} from group ${removeMemberGroupId}`
+      );
+      setRemoveMemberAddress("");
       await fetchGroups(selectedAccount, contract);
     } catch (e) {
       setError(e.message);
@@ -180,9 +245,14 @@ export default function GroupHomePage() {
     try {
       const contract = await getContract();
       const delay = parseInt(settlementDelay);
-      if (isNaN(delay) || delay <= 0) return setError("Invalid delay in seconds");
-      await contract.methods.scheduleAutoSettlement(groupId, delay).send({ from: selectedAccount });
-      setMessage(`Auto-settlement scheduled for Group ${groupId} in ${delay} seconds`);
+      if (isNaN(delay) || delay <= 0)
+        return setError("Invalid delay in seconds");
+      await contract.methods
+        .scheduleAutoSettlement(groupId, delay)
+        .send({ from: selectedAccount });
+      setMessage(
+        `Auto-settlement scheduled for Group ${groupId} in ${delay} seconds`
+      );
       await fetchAutoSettlementTimes(contract, selectedAccount);
     } catch (err) {
       console.error(err);
@@ -193,7 +263,9 @@ export default function GroupHomePage() {
   const handleTriggerAutoSettlement = async (groupId) => {
     try {
       const contract = await getContract();
-      await contract.methods.triggerAutoSettlement(groupId).send({ from: selectedAccount });
+      await contract.methods
+        .triggerAutoSettlement(groupId)
+        .send({ from: selectedAccount });
       setMessage(`Auto-settlement triggered for Group ${groupId}`);
     } catch (err) {
       console.error(err);
@@ -201,8 +273,9 @@ export default function GroupHomePage() {
     }
   };
 
-  const shortAddr = addr => `${addr.slice(0,8)}…`;
-  const findUsername = addr => registeredUsers.find(u => u.address === addr)?.username || '—';
+  const shortAddr = (addr) => `${addr.slice(0, 8)}…`;
+  const findUsername = (addr) =>
+    registeredUsers.find((u) => u.address === addr)?.username || "—";
 
   return (
     <div className="group-home-container">
@@ -210,7 +283,11 @@ export default function GroupHomePage() {
       <label>
         Select Account:
         <select value={selectedAccount} onChange={handleAccountChange}>
-          {accounts.map(a => <option key={a} value={a}>{shortAddr(a)}</option>)}
+          {accounts.map((a) => (
+            <option key={a} value={a}>
+              {shortAddr(a)}
+            </option>
+          ))}
         </select>
       </label>
       {message && <div className="message success">{message}</div>}
@@ -218,19 +295,29 @@ export default function GroupHomePage() {
 
       <section className="card">
         <h2>Registered Users</h2>
-        {registeredUsers.length === 0
-          ? <p>No users registered yet.</p>
-          : <ul>
-              {registeredUsers.map(u => (
-                <li key={u.address}>{u.username} ({shortAddr(u.address)})</li>
-              ))}
-            </ul>}
+        {registeredUsers.length === 0 ? (
+          <p>No users registered yet.</p>
+        ) : (
+          <ul>
+            {registeredUsers.map((u) => (
+              <li key={u.address}>
+                {u.username} ({shortAddr(u.address)})
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="card">
         <h2>Register User</h2>
         <form onSubmit={handleRegister}>
-          <input type="text" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} required />
+          <input
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
           <button type="submit">Register</button>
         </form>
       </section>
@@ -238,33 +325,72 @@ export default function GroupHomePage() {
       <section className="card">
         <h2>Create Group</h2>
         <form onSubmit={handleCreateGroup}>
-          <input type="text" placeholder="Group Name" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} required />
+          <input
+            type="text"
+            placeholder="Group Name"
+            value={newGroupName}
+            onChange={(e) => setNewGroupName(e.target.value)}
+            required
+          />
           <button type="submit">Create</button>
         </form>
       </section>
 
       <section className="card">
         <h2>Existing Groups</h2>
-        {groups.length === 0 ? <p>No groups yet.</p> : (
+        {groups.length === 0 ? (
+          <p>No groups yet.</p>
+        ) : (
           <ul>
-            {groups.map(g => (
+            {groups.map((g) => (
               <li key={g.id}>
-                <strong>{g.id}: {g.name}</strong> (Owner: {findUsername(g.owner)})<br/>
-                Members: {g.members.map(m => (
-                  <span key={m} className="member-chip">{findUsername(m)} ({shortAddr(m)})</span>
-                ))}<br/>
-                <p>Escrow Balance: {escrowAmounts[g.id] || '0'} ETH</p>
-                <input type="number" step="0.01" placeholder="Deposit (ETH)" value={depositAmount} onChange={e => setDepositAmount(e.target.value)} />
-                <button onClick={() => handleDepositToEscrow(g.id)}>Deposit</button>
+                <strong>
+                  {g.id}: {g.name}
+                </strong>{" "}
+                (Owner: {findUsername(g.owner)})<br />
+                Members:{" "}
+                {g.members.map((m) => (
+                  <span key={m} className="member-chip">
+                    {findUsername(m)} ({shortAddr(m)})
+                  </span>
+                ))}
+                <br />
+                <p>Escrow Balance: {escrowAmounts[g.id] || "0"} ETH</p>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Deposit (ETH)"
+                  value={depositAmount}
+                  onChange={(e) => setDepositAmount(e.target.value)}
+                />
+                <button onClick={() => handleDepositToEscrow(g.id)}>
+                  Deposit
+                </button>
                 {g.owner === selectedAccount && (
                   <div className="auto-settle">
-                    <input type="number" placeholder="Delay (sec)" value={settlementDelay} onChange={e => setSettlementDelay(e.target.value)} />
-                    <button onClick={() => handleScheduleAutoSettlement(g.id)}>Schedule Auto-Settlement</button>
-                    <button onClick={() => handleTriggerAutoSettlement(g.id)}>Trigger Now</button>
+                    <input
+                      type="number"
+                      placeholder="Delay (sec)"
+                      value={settlementDelay}
+                      onChange={(e) => setSettlementDelay(e.target.value)}
+                    />
+                    <button onClick={() => handleScheduleAutoSettlement(g.id)}>
+                      Schedule Auto-Settlement
+                    </button>
+                    <button onClick={() => handleTriggerAutoSettlement(g.id)}>
+                      Trigger Now
+                    </button>
                     {autoTimes[g.id] && (
                       <p>
-                        Scheduled for: {new Date(autoTimes[g.id] * 1000).toLocaleString()}<br />
-                        Time remaining: {Math.max(autoTimes[g.id] - Math.floor(Date.now() / 1000), 0)} sec
+                        Scheduled for:{" "}
+                        {new Date(autoTimes[g.id] * 1000).toLocaleString()}
+                        <br />
+                        Time remaining:{" "}
+                        {Math.max(
+                          autoTimes[g.id] - Math.floor(Date.now() / 1000),
+                          0
+                        )}{" "}
+                        sec
                       </p>
                     )}
                   </div>
@@ -278,13 +404,29 @@ export default function GroupHomePage() {
       <section className="card">
         <h2>Add Member</h2>
         <form onSubmit={handleAddMember}>
-          <select value={addMemberGroupId} onChange={e => setAddMemberGroupId(e.target.value)} required>
+          <select
+            value={addMemberGroupId}
+            onChange={(e) => setAddMemberGroupId(e.target.value)}
+            required
+          >
             <option value="">Select Group</option>
-            {groups.map(g => <option key={g.id} value={g.id}>{g.id}: {g.name}</option>)}
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.id}: {g.name}
+              </option>
+            ))}
           </select>
-          <select value={addMemberAddress} onChange={e => setAddMemberAddress(e.target.value)} required>
+          <select
+            value={addMemberAddress}
+            onChange={(e) => setAddMemberAddress(e.target.value)}
+            required
+          >
             <option value="">Select User</option>
-            {registeredUsers.map(u => <option key={u.address} value={u.address}>{u.username} ({shortAddr(u.address)})</option>)}
+            {registeredUsers.map((u) => (
+              <option key={u.address} value={u.address}>
+                {u.username} ({shortAddr(u.address)})
+              </option>
+            ))}
           </select>
           <button type="submit">Add</button>
         </form>
@@ -293,14 +435,31 @@ export default function GroupHomePage() {
       <section className="card">
         <h2>Remove Member</h2>
         <form onSubmit={handleRemoveMember}>
-          <select value={removeMemberGroupId} onChange={e => setRemoveMemberGroupId(e.target.value)} required>
+          <select
+            value={removeMemberGroupId}
+            onChange={(e) => setRemoveMemberGroupId(e.target.value)}
+            required
+          >
             <option value="">Select Group</option>
-            {groups.map(g => <option key={g.id} value={g.id}>{g.id}: {g.name}</option>)}
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.id}: {g.name}
+              </option>
+            ))}
           </select>
-          <select value={removeMemberAddress} onChange={e => setRemoveMemberAddress(e.target.value)} required>
+          <select
+            value={removeMemberAddress}
+            onChange={(e) => setRemoveMemberAddress(e.target.value)}
+            required
+          >
             <option value="">Select Member</option>
-            {(groups.find(g => g.id === Number(removeMemberGroupId))?.members || []).map(m => (
-              <option key={m} value={m}>{findUsername(m)} ({shortAddr(m)})</option>
+            {(
+              groups.find((g) => g.id === Number(removeMemberGroupId))
+                ?.members || []
+            ).map((m) => (
+              <option key={m} value={m}>
+                {findUsername(m)} ({shortAddr(m)})
+              </option>
             ))}
           </select>
           <button type="submit">Remove</button>
