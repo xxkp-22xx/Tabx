@@ -71,7 +71,7 @@ npm install
 truffle compile
 truffle migrate --network development
 ```
-## Make sure to change the latest deployed contract address in Utils/contract.js
+## Make sure to change the latest deployed TABX.json from truffle/Build/ file in App/src/abi/
 
 ### 6. Starting the server and frontend.
 ```
