@@ -24,17 +24,6 @@
 
 ---
 
-## 📁 Project Structure
-
-Tabx/
-├── backend/ # Node.js backend
-├── my-app/ # React frontend
-├── truffle/ # Solidity smart contracts
-├── .github/workflows/ # CI/CD workflows
-├── Dockerfile # Docker configuration
-└── README.md # Project documentation
-
----
 
 ## 📦 Prerequisites
 
@@ -56,38 +45,41 @@ git clone https://github.com/xxkp-22xx/Tabx.git
 cd Tabx
 ```
 
-```bash
-git clone https://github.com/xxkp-22xx/Tabx.git
-cd Tabx```
-
+###Install Dependencies
+###Backend
 ```
-cd contracts
+cd backend
 npm install
+```
 
-cd ../backend
-npm install
-
+###Install Frontend dependencies
+```
 cd ../frontend
 npm install
 ```
 
+###Setting up .env file
 ```
 PORT=5000
 MONGODB_URI=your_mongodb_connection_string
 ```
 
+###Deploying the smart contract
 ```
 cd ../truffle
 npm install
 truffle compile
 truffle migrate --network development
 ```
+##Make sure to change the latest deployed contract address in Utils/contract.js
 
+###Starting the server and frontend.
 ```
 cd ../backend
 npm start
+```
 
+```
 cd ../my-app
 npm start
-
 ```
