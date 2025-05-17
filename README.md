@@ -83,3 +83,15 @@ npm start
 cd ../my-app
 npm start
 ```
+
+---
+# CI/CD Pipeline using Github actions and AWS EC2 Instance.
+
+## Github Actions and AWS EC2.
+- The script is already there in Guthub/workflows folder, CI.yml and CD.yml. Change or update as per your comfigurations.
+- CI.yml will contain DockerHub Credentials, It will build an Docker image and push it to Dockerhub with Latest tag.
+- After CI pipeline succedded, we will add a github action Runner in linux, and start it on EC2 instance terminal.
+- After successfull connection, we will install docker related dependancies on it.
+- CD.yml will pull the Docker Image from DockerHub using credentials in Secrets. Then it will run the container on 3001 port on AWS EC2 (make sure the security group allows all traffic to the instance)
+
+### This is the workflow of pipeline, We devided it into two sections, Continuss Integration (CI) and Continuos Deployment (CD)
