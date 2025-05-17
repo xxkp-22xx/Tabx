@@ -45,35 +45,35 @@ git clone https://github.com/xxkp-22xx/Tabx.git
 cd Tabx
 ```
 
-###Install Dependencies
+### 2. Install Dependencies
 ###Backend
 ```
 cd backend
 npm install
 ```
 
-###Install Frontend dependencies
+### 3. Install Frontend dependencies
 ```
 cd ../frontend
 npm install
 ```
 
-###Setting up .env file
+### 4. Setting up .env file
 ```
 PORT=5000
 MONGODB_URI=your_mongodb_connection_string
 ```
 
-###Deploying the smart contract
+### 5. Deploying the smart contract
 ```
 cd ../truffle
 npm install
 truffle compile
 truffle migrate --network development
 ```
-##Make sure to change the latest deployed contract address in Utils/contract.js
+## Make sure to change the latest deployed contract address in Utils/contract.js
 
-###Starting the server and frontend.
+### 6. Starting the server and frontend.
 ```
 cd ../backend
 npm start
